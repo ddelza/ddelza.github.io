@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전력량 관리 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .container {
+            display: grid;
+            grid-template-areas:
+                "header header header"
+                "shop workspace controls";
+            grid-template-columns: 2fr 5fr 2fr;
+            gap: 1.5rem;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header { grid-area: header; }
+        .shop { grid-area: shop; }
+        .workspace { grid-area: workspace; }
+        .controls { grid-area: controls; }
+        
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-areas:
+                    "header header"
+                    "workspace workspace"
+                    "shop controls";
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-areas:
+                    "header"
+                    "shop"
+                    "workspace"
+                    "controls";
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background-color: #2d3748;
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .machine-item {
+            cursor: grab;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .machine-item:active {
+            cursor: grabbing;
+        }
+
+        .grid-cell {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #2d3748;
+            transition: background-color 0.1s;
+            border-radius: 0.25rem;
+            box-shadow: inset 0 0 0 1px #4a5568;
+            aspect-ratio: 1 / 1;
+        }
+
+        .grid-cell.occupied {
+            background-color: #4c51bf;
+        }
+
+        .machine {
+            background-color: #63b3ed;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.875rem;
+            cursor: grab;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        
+        .machine:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .machine:active {
+            cursor: grabbing;
+        }
+
+        .drag-over {
+            background-color: #4a5568;
+            border: 2px dashed #a0aec0;
+        }
+
+        .button-group button {
+            transition: transform 0.1s ease-in-out;
+        }
+        
+        .button-group button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .temporary-message {
+             position: fixed;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             color: white;
+             font-weight: bold;
+             padding: 0.5rem 1rem;
+             border-radius: 0.5rem;
+             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+             z-index: 100;
+             transition: opacity 0.3s ease-in-out;
+             text-align: center;
+        }
+        
+        .temporary-message.success {
+            background-color: #48bb78;
+        }
+        
+        .temporary-message.error {
+            background-color: #e53e3e;
+        }
+        
+        .game-over-message, .win-message {
+            background-color: #e53e3e;
+            font-size: 1.5rem;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            font-weight: bold;
+            opacity: 1 !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .win-message {
+            background-color: #38a169;
+        }
+
+        .game-restart-btn {
+            background-color: #2b6cb0;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .game-restart-btn:hover {
+            background-color: #3182ce;
+        }
+
+        .workspace {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+        
+        .workspace #grid-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 0;
+        }
+        
+        .workspace #grid-container .grid-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="container min-h-screen p-4">
+        <!-- 상단 정보 UI -->
+        <div class="header panel flex justify-between items-center text-sm lg:text-base flex-wrap gap-2">
+            <div>보유금액: <span id="money" class="font-bold text-yellow-400">0원</span></div>
+            <div>진행 일 수: <span id="days" class="font-bold text-blue-400">0일</span></div>
+            <div>전력 사용량: <span id="powerUsage" class="font-bold text-red-400">0kWh</span></div>
+            <div>지난달 전력 사용량: <span id="lastMonthPower" class="font-bold text-red-400">0kWh</span></div>
+            <div>다음 전기세까지: <span id="daysUntilBill" class="font-bold text-green-400">0일</span></div>
+        </div>
+
+        <!-- 좌측 기계 구매 UI -->
+        <div class="shop panel" id="shop-panel">
+            <h2 class="text-xl font-bold mb-4 text-center">기계 구매</h2>
+            <div id="machine-list" class="flex flex-col gap-4">
+                <!-- 기계 목록은 JS로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- 중앙 작업장 UI -->
+        <div class="workspace panel">
+            <div id="grid-container" class="relative">
+                <!-- 그리드 셀은 JS로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- 우측 통계 및 제어 UI -->
+        <div class="controls panel flex flex-col justify-between">
+            <div class="flex flex-col gap-2 text-sm lg:text-base">
+                <h2 class="text-xl font-bold mb-4 text-center">통계</h2>
+                <div>총 수입: <span id="total-income" class="font-bold text-green-400">0원</span></div>
+                <div>총 전기세: <span id="total-bill" class="font-bold text-red-400">0원</span></div>
+                <div>총 기계 구입비: <span id="total-machine-cost" class="font-bold text-red-400">0원</span></div>
+                <div>순수익: <span id="net-profit" class="font-bold text-yellow-400">0원</span></div>
+                
+                <!-- 버튼을 통계 바로 아래로 이동 -->
+                <div class="button-group flex flex-col gap-4 mt-4">
+                    <button id="next-day-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-colors">
+                        하루 보내기
+                    </button>
+                    <button id="next-month-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-colors">
+                        한달 보내기
+                    </button>
+                </div>
+
+                <!-- 누진세 기준 정보 추가 -->
+                <div class="mt-4 p-4 rounded-lg bg-gray-700">
+                    <p class="text-xs text-gray-400 font-bold mb-2">
+                        전기세 누진세 요금 기준
+                    </p>
+                    <ul class="text-xs text-gray-400 list-disc list-inside">
+                        <li>~ 200kWh 이하: 120원/kWh</li>
+                        <li>200kWh 초과 ~ 400kWh 이하: 215원/kWh</li>
+                        <li>400kWh 초과: 300원/kWh</li>
+                    </ul>
+                </div>
+
+                <!-- 게임 목표 설명 추가 -->
+                <div class="mt-4 p-4 rounded-lg bg-gray-700">
+                    <p class="mt-2 text-xs text-gray-400 leading-relaxed">
+                        💰 게임 목표: 2년(730일) 동안 파산하지 않고 최대한 많은 순수익을 달성하세요!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 임시 메시지 및 파산 메시지 컨테이너 -->
+    <div id="message-container"></div>
+    
+    <script>
+        // 게임 상태 변수
+        let gameState = {
+            money: 1000,
+            day: 0,
+            currentMonthKwh: 0,
+            lastMonthKwh: 0,
+            daysUntilBill: 30,
+            totalIncome: 0,
+            totalBill: 0,
+            totalMachineCost: 0,
+            machineCounter: 0,
+            workspaceGrid: [],
+        };
+        
+        const WIN_CONDITION_DAYS = 730;
+        const gridWidth = 5;
+        const gridHeight = 6;
+        let isGameOver = false;
+        let fastForwardInterval = null;
+        let pressTimer = null;
+        let draggedMachineId = null;
+        let draggedMachineInstance = null;
+
+        // UI 요소
+        const moneyEl = document.getElementById('money');
+        const daysEl = document.getElementById('days');
+        const powerUsageEl = document.getElementById('powerUsage');
+        const lastMonthPowerEl = document.getElementById('lastMonthPower');
+        const daysUntilBillEl = document.getElementById('daysUntilBill');
+        const totalIncomeEl = document.getElementById('total-income');
+        const totalBillEl = document.getElementById('total-bill');
+        const totalMachineCostEl = document.getElementById('total-machine-cost');
+        const netProfitEl = document.getElementById('net-profit');
+        const machineListEl = document.getElementById('machine-list');
+        const gridContainer = document.getElementById('grid-container');
+        const nextDayBtn = document.getElementById('next-day-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+        const messageContainer = document.getElementById('message-container');
+        const shopPanel = document.getElementById('shop-panel');
+
+        // 기계 정보
+        const machines = {
+            'rat': { name: '쥐', price: 500, power: 40, income: 200, size: [1, 1], emoji: '🐭' },
+            'cow': { name: '소', price: 1500, power: 100, income: 550, size: [1, 2], emoji: '🐮' },
+            'rabbit': { name: '토끼', price: 1200, power: 70, income: 400, size: [3, 1], emoji: '🐰' },
+            'tiger': { name: '호랑이', price: 5000, power: 180, income: 1000, size: [2, 2], emoji: '🐯' },
+            'dragon': { name: '용', price: 8000, power: 400, income: 2200, size: [2, 3], emoji: '🐉' },
+        };
+
+        // UI 업데이트 함수
+        const updateUI = () => {
+            moneyEl.textContent = `${gameState.money.toLocaleString()}원`;
+            daysEl.textContent = `${gameState.day}일 (${gameState.day}/${WIN_CONDITION_DAYS})`;
+            powerUsageEl.textContent = `${(gameState.currentMonthKwh).toFixed(2)}kWh`;
+            lastMonthPowerEl.textContent = `${(gameState.lastMonthKwh).toFixed(2)}kWh`;
+            daysUntilBillEl.textContent = `${gameState.daysUntilBill}일`;
+            totalIncomeEl.textContent = `${gameState.totalIncome.toLocaleString()}원`;
+            totalBillEl.textContent = `${gameState.totalBill.toLocaleString()}원`;
+            totalMachineCostEl.textContent = `${gameState.totalMachineCost.toLocaleString()}원`;
+            const netProfit = gameState.totalIncome - gameState.totalBill - gameState.totalMachineCost;
+            netProfitEl.textContent = `${netProfit.toLocaleString()}원`;
+        };
+        
+        // 일일 수입 계산
+        const calculateDailyIncome = () => {
+            let dailyIncome = 0;
+            const processedInstances = new Set();
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const machineInstance = gameState.workspaceGrid[y][x];
+                    if (machineInstance && !processedInstances.has(machineInstance.instanceId)) {
+                        processedInstances.add(machineInstance.instanceId);
+                        dailyIncome += machines[machineInstance.id].income;
+                    }
+                }
+            }
+            return dailyIncome;
+        };
+
+        // 일일 전력 소비 계산
+        const calculateDailyPower = () => {
+            let dailyPower = 0;
+            const processedInstances = new Set();
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const machineInstance = gameState.workspaceGrid[y][x];
+                    if (machineInstance && !processedInstances.has(machineInstance.instanceId)) {
+                        processedInstances.add(machineInstance.instanceId);
+                        dailyPower += machines[machineInstance.id].power;
+                    }
+                }
+            }
+            return dailyPower * 24 / 1000;
+        };
+
+        // 전기세 계산 (올바른 누진 요율)
+        const calculateElectricityBill = (kwh) => {
+            let totalBill = 0;
+            if (kwh > 400) {
+                totalBill += (kwh - 400) * 300;
+                kwh = 400;
+            }
+            if (kwh > 200) {
+                totalBill += (kwh - 200) * 215;
+                kwh = 200;
+            }
+            totalBill += kwh * 120;
+            return totalBill;
+        };
+
+        // 게임 종료(파산) 처리
+        const endGame = () => {
+            isGameOver = true;
+            nextDayBtn.disabled = true;
+            nextMonthBtn.disabled = true;
+            nextDayBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            nextMonthBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const finalBill = calculateElectricityBill(gameState.currentMonthKwh);
+            gameState.money -= finalBill;
+            gameState.totalBill += finalBill;
+            gameState.lastMonthKwh = gameState.currentMonthKwh;
+            gameState.currentMonthKwh = 0;
+            updateUI();
+            
+            showTemporaryMessage(
+                `파산했습니다!<br>최종 보유 금액: ${gameState.money.toLocaleString()}원<br>총 기계 구입비: ${gameState.totalMachineCost.toLocaleString()}원<br>총 전기세: ${gameState.totalBill.toLocaleString()}원`,
+                'game-over-message'
+            );
+        };
+
+        // 게임 승리 처리
+        const winGame = () => {
+            isGameOver = true;
+            nextDayBtn.disabled = true;
+            nextMonthBtn.disabled = true;
+            nextDayBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            nextMonthBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const totalCost = gameState.totalBill + gameState.totalMachineCost;
+            const netProfit = gameState.totalIncome - totalCost;
+            
+            showTemporaryMessage(
+                `축하합니다! 2년 동안 파산하지 않고 살아남으셨습니다.<br><br>
+                순수익: ${netProfit.toLocaleString()}원<br>
+                총 수입: ${gameState.totalIncome.toLocaleString()}원<br>
+                총 소비: ${totalCost.toLocaleString()}원`,
+                'win-message'
+            );
+        };
+
+        // 하루 진행
+        const nextDay = async () => {
+            if (isGameOver) return;
+            
+            gameState.day++;
+            const dailyIncome = calculateDailyIncome();
+            const dailyPower = calculateDailyPower();
+
+            gameState.money += dailyIncome;
+            gameState.totalIncome += dailyIncome;
+            gameState.currentMonthKwh += dailyPower;
+            gameState.daysUntilBill--;
+
+            if (gameState.day === WIN_CONDITION_DAYS) {
+                winGame();
+                return;
+            }
+
+            if (gameState.daysUntilBill <= 0) {
+                const billAmount = calculateElectricityBill(gameState.currentMonthKwh);
+                gameState.money -= billAmount;
+                gameState.totalBill += billAmount;
+                gameState.lastMonthKwh = gameState.currentMonthKwh;
+                gameState.currentMonthKwh = 0;
+                gameState.daysUntilBill = 30;
+            }
+            
+            if (gameState.money < 0) {
+                endGame();
+                return;
+            }
+
+            updateUI();
+        };
+
+        // 기계 목록 UI 생성
+        const createMachineListUI = () => {
+            machineListEl.innerHTML = '';
+            for (const id in machines) {
+                const machine = machines[id];
+                const item = document.createElement('div');
+                item.id = `buy-${id}`;
+                item.className = 'machine-item flex items-center bg-gray-700 p-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors cursor-pointer';
+                item.setAttribute('draggable', 'true');
+                item.setAttribute('data-machine-id', id);
+                
+                const sizeText = `${machine.size[0]}x${machine.size[1]}`;
+
+                item.innerHTML = `
+                    <span class="text-4xl mr-4">${machine.emoji}</span>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-lg">${machine.name} (${sizeText})</h3>
+                        <p class="text-sm text-gray-400">가격: ${machine.price.toLocaleString()}원</p>
+                        <p class="text-sm text-gray-400">소비전력: ${machine.power}W</p>
+                        <p class="text-sm text-gray-400">일일 수입: ${machine.income.toLocaleString()}원</p>
+                    </div>
+                `;
+                item.addEventListener('dragstart', (e) => {
+                    draggedMachineId = id;
+                    e.dataTransfer.setData('text/plain', id);
+                });
+                machineListEl.appendChild(item);
+            }
+        };
+        
+        // 기계 구매
+        const buyMachine = (machineId) => {
+             const machine = machines[machineId];
+             if (gameState.money >= machine.price) {
+                 return true;
+             } else {
+                 showTemporaryMessage("돈이 부족합니다!", 'error');
+                 return false;
+             }
+        };
+
+        let messageTimeout = null;
+        const showTemporaryMessage = (message, type) => {
+            if (type === 'game-over-message' || type === 'win-message') {
+                const messageEl = document.createElement('div');
+                messageEl.className = `temporary-message ${type}`;
+                messageEl.innerHTML = message;
+                const restartBtn = document.createElement('button');
+                restartBtn.textContent = '다시 시작';
+                restartBtn.className = 'game-restart-btn';
+                restartBtn.addEventListener('click', startGame);
+                messageEl.appendChild(restartBtn);
+                messageContainer.innerHTML = '';
+                messageContainer.appendChild(messageEl);
+                return;
+            }
+
+            if (messageTimeout) clearTimeout(messageTimeout);
+            
+            const messageEl = document.createElement('div');
+            messageEl.className = `temporary-message ${type}`;
+            messageEl.innerHTML = message;
+            
+            messageContainer.innerHTML = '';
+            messageContainer.appendChild(messageEl);
+
+            setTimeout(() => messageEl.style.opacity = '1', 10);
+            messageTimeout = setTimeout(() => {
+                messageEl.style.opacity = '0';
+                setTimeout(() => messageEl.remove(), 300);
+            }, 2000);
+        };
+        
+        // 그리드 생성
+        const createGrid = () => {
+            gridContainer.innerHTML = '';
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.setAttribute('data-x', x);
+                    cell.setAttribute('data-y', y);
+                    gridContainer.appendChild(cell);
+                }
+            }
+        };
+
+        // 공간 확인
+        const isSpaceAvailable = (x, y, size) => {
+            const [width, height] = size;
+            if (x + width > gridWidth || y + height > gridHeight) {
+                return false;
+            }
+            for (let i = 0; i < width; i++) {
+                for (let j = 0; j < height; j++) {
+                    if (gameState.workspaceGrid[y + j][x + i] !== null) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
+        
+        // 그리드에 기계 렌더링
+        const renderMachinesOnGrid = () => {
+            gridContainer.querySelectorAll('.machine').forEach(el => el.remove());
+            const renderedInstances = new Set();
+            
+            const gridRect = gridContainer.getBoundingClientRect();
+            const cellSize = gridRect.width / gridWidth;
+            
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const machineInstance = gameState.workspaceGrid[y][x];
+                    if (machineInstance && !renderedInstances.has(machineInstance.instanceId)) {
+                        renderedInstances.add(machineInstance.instanceId);
+
+                        const machineData = machines[machineInstance.id];
+                        const [mWidth, mHeight] = machineData.size;
+
+                        const machineEl = document.createElement('div');
+                        machineEl.className = 'machine';
+                        machineEl.setAttribute('draggable', 'true');
+                        machineEl.setAttribute('data-instance-id', machineInstance.instanceId);
+                        
+                        const cellX = x * cellSize;
+                        const cellY = y * cellSize;
+                        const machineWidth = mWidth * cellSize;
+                        const machineHeight = mHeight * cellSize;
+
+                        machineEl.style.left = `${cellX}px`;
+                        machineEl.style.top = `${cellY}px`;
+                        machineEl.style.width = `${machineWidth}px`;
+                        machineEl.style.height = `${machineHeight}px`;
+                        machineEl.innerHTML = `<span class="text-2xl">${machineData.emoji}</span>`;
+                        gridContainer.appendChild(machineEl);
+                    }
+                }
+            }
+        };
+        
+        // 기계 판매
+        const sellMachine = async (instanceId) => {
+            let sold = false;
+            let machineId = null;
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const instance = gameState.workspaceGrid[y][x];
+                    if (instance && instance.instanceId === instanceId) {
+                        machineId = instance.id;
+                        gameState.workspaceGrid[y][x] = null;
+                        sold = true;
+                    }
+                }
+            }
+
+            if (sold && machineId) {
+                const machinePrice = machines[machineId].price;
+                const sellPrice = Math.floor(machinePrice * 0.7);
+                gameState.money += sellPrice;
+                gameState.totalMachineCost -= machinePrice;
+                showTemporaryMessage(`${machines[machineId].name} 판매: +${sellPrice.toLocaleString()}원`, 'success');
+                updateUI();
+                renderMachinesOnGrid();
+            }
+        };
+
+        // 드래그 앤 드롭 이벤트
+        gridContainer.addEventListener('dragstart', (e) => {
+            const target = e.target.closest('.machine');
+            if (target) {
+                e.stopPropagation();
+                draggedMachineInstance = target.getAttribute('data-instance-id');
+                draggedMachineId = null;
+            } else {
+                draggedMachineInstance = null;
+                draggedMachineId = e.dataTransfer.getData('text/plain');
+            }
+        });
+
+        gridContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            gridContainer.querySelectorAll('.grid-cell').forEach(cell => cell.classList.remove('drag-over'));
+            if (draggedMachineId) {
+                const target = e.target.closest('.grid-cell');
+                if (target) {
+                    const x = parseInt(target.getAttribute('data-x'));
+                    const y = parseInt(target.getAttribute('data-y'));
+                    if (isSpaceAvailable(x, y, machines[draggedMachineId].size)) {
+                        const [w, h] = machines[draggedMachineId].size;
+                        for (let i = 0; i < w; i++) {
+                            for (let j = 0; j < h; j++) {
+                                const cellIndex = (y + j) * gridWidth + (x + i);
+                                const cell = gridContainer.children[cellIndex];
+                                if (cell) {
+                                    cell.classList.add('drag-over');
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        gridContainer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            gridContainer.querySelectorAll('.grid-cell').forEach(cell => cell.classList.remove('drag-over'));
+            const target = e.target.closest('.grid-cell');
+
+            if (target && draggedMachineId) {
+                const x = parseInt(target.getAttribute('data-x'));
+                const y = parseInt(target.getAttribute('data-y'));
+                const machine = machines[draggedMachineId];
+
+                if (buyMachine(draggedMachineId)) {
+                     if (isSpaceAvailable(x, y, machine.size)) {
+                        const instance = { id: draggedMachineId, instanceId: `instance_${gameState.machineCounter++}` };
+                        for (let i = 0; i < machine.size[0]; i++) {
+                            for (let j = 0; j < machine.size[1]; j++) {
+                                if (y + j < gridHeight && x + i < gridWidth) {
+                                    gameState.workspaceGrid[y + j][x + i] = instance;
+                                }
+                            }
+                        }
+                        gameState.money -= machine.price;
+                        gameState.totalMachineCost += machine.price;
+                        updateUI();
+                        if (gameState.money < 0) {
+                            endGame();
+                        }
+                        renderMachinesOnGrid();
+                     } else {
+                        showTemporaryMessage("공간이 부족합니다!", 'error');
+                     }
+                }
+            }
+            draggedMachineId = null;
+            draggedMachineInstance = null;
+        });
+        
+        shopPanel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            shopPanel.classList.add('drag-over');
+        });
+        
+        shopPanel.addEventListener('dragleave', () => {
+            shopPanel.classList.remove('drag-over');
+        });
+
+        shopPanel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            shopPanel.classList.remove('drag-over');
+            if (draggedMachineInstance) {
+                sellMachine(draggedMachineInstance);
+                draggedMachineInstance = null;
+            }
+        });
+
+        // 키보드 이벤트 (스페이스바)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isGameOver) {
+                if (!e.repeat) {
+                   nextDay();
+                   pressTimer = setTimeout(() => {
+                       fastForwardInterval = setInterval(nextDay, 50);
+                   }, 1000);
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                clearTimeout(pressTimer);
+                clearInterval(fastForwardInterval);
+                fastForwardInterval = null;
+            }
+        });
+        
+        // 버튼 이벤트
+        nextDayBtn.addEventListener('click', nextDay);
+        nextDayBtn.addEventListener('mousedown', () => {
+            if (!isGameOver) {
+                pressTimer = setTimeout(() => {
+                    fastForwardInterval = setInterval(nextDay, 50);
+                }, 1000);
+            }
+        });
+        document.addEventListener('mouseup', () => {
+            clearTimeout(pressTimer);
+            clearInterval(fastForwardInterval);
+        });
+
+        nextMonthBtn.addEventListener('click', async () => {
+            if (isGameOver) return;
+            for (let i = 0; i < 30; i++) {
+                nextDay();
+                if (isGameOver) break;
+            }
+        });
+        
+        // 게임 초기화
+        const startGame = () => {
+            isGameOver = false;
+            
+            // 저장 기능이 없으므로 항상 새로운 게임을 시작합니다.
+            gameState = {
+                money: 1000,
+                day: 0,
+                currentMonthKwh: 0,
+                lastMonthKwh: 0,
+                daysUntilBill: 30,
+                totalIncome: 0,
+                totalBill: 0,
+                totalMachineCost: 0,
+                machineCounter: 0,
+                workspaceGrid: Array.from({ length: gridHeight }, () => Array(gridWidth).fill(null)),
+            };
+            updateUI();
+            renderMachinesOnGrid();
+            showTemporaryMessage("게임을 시작합니다!", 'success');
+            
+            nextDayBtn.disabled = false;
+            nextMonthBtn.disabled = false;
+            nextDayBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            nextMonthBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        };
+
+        // 페이지 로드 시 게임 시작
+        const initGame = () => {
+            createMachineListUI();
+            createGrid();
+            startGame();
+        };
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
