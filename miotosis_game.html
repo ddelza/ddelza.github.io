@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>체세포 분열 시뮬레이션</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f4f8;
+            color: #334155;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        h1 {
+            color: #1e293b;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        p.description {
+            text-align: center;
+            font-size: 1rem;
+            max-width: 600px;
+            margin-bottom: 20px;
+        }
+
+        .game-area {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+        }
+
+        canvas {
+            border: 2px solid #cbd5e1;
+            border-radius: 12px;
+            background-color: #ffffff;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 1 / 1;
+        }
+
+        .info-box {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #334155;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 200;
+        }
+
+        .info-box.visible {
+            opacity: 1;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 200px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: white;
+            background-color: #4a5568;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #2d3748;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.15), 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+        }
+        
+        button:disabled {
+            background-color: #e2e8f0;
+            cursor: not-allowed;
+            color: #a0aec0;
+            box-shadow: none;
+        }
+
+        .context-menu {
+            position: absolute;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 100;
+            overflow: hidden;
+            display: none;
+            list-style: none;
+            padding: 5px 0;
+            margin: 0;
+        }
+
+        .context-menu li {
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .context-menu li:hover {
+            background-color: #f0f4f8;
+        }
+
+        .context-menu li.disabled {
+            color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        /* Congratulations Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 15px 25px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            animation: slideIn 0.5s ease-out;
+            transform: translateY(-50px);
+        }
+
+        .modal-content h2 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+
+        .modal-content p {
+            font-size: 1rem;
+            color: #475569;
+            margin-bottom: 20px;
+        }
+
+        .modal-content button {
+            width: auto;
+            min-width: 150px;
+            padding: 12px 30px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <h1>체세포 분열 시뮬레이션</h1>
+            <p class="description">
+                각 DNA 가닥을 마우스 오른쪽 버튼으로 클릭해 '응축하기'와 '복제하기'를 선택할 수 있습니다. 핵막이 사라지면 염색체를 드래그해 중앙의 세로선에 배열시키세요.
+            </p>
+            <div class="game-area">
+                <canvas id="mitosisCanvas"></canvas>
+                <div id="infoBox" class="info-box"></div>
+            </div>
+        </div>
+        <div class="controls">
+            <button id="nuclearMembraneBtn">핵막 없애기</button>
+            <button id="launchSpindleBtn" disabled>방추사 발사</button>
+            <button id="separateChromatidsBtn" disabled>염색분체 분리</button>
+            <button id="cytokinesisBtn" disabled>세포질 분열</button>
+        </div>
+    </div>
+    
+    <ul id="contextMenu" class="context-menu">
+        <li id="condenseOption">응축하기</li>
+        <li id="replicateOption">복제하기</li>
+        <li id="uncondenseOption">응축 풀기</li>
+    </ul>
+
+    <div id="congratsModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>축하합니다!</h2>
+            <p>체세포 분열 과정을 성공적으로 완료했습니다.</p>
+            <button id="restartBtn">다시하기</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mitosisCanvas');
+        const ctx = canvas.getContext('2d');
+        const controls = {
+            nuclearMembrane: document.getElementById('nuclearMembraneBtn'),
+            launchSpindle: document.getElementById('launchSpindleBtn'),
+            separateChromatids: document.getElementById('separateChromatidsBtn'),
+            cytokinesis: document.getElementById('cytokinesisBtn')
+        };
+        const contextMenu = document.getElementById('contextMenu');
+        const condenseOption = document.getElementById('condenseOption');
+        const replicateOption = document.getElementById('replicateOption');
+        const uncondenseOption = document.getElementById('uncondenseOption');
+        const infoBox = document.getElementById('infoBox');
+        const congratsModal = document.getElementById('congratsModal');
+        const restartBtn = document.getElementById('restartBtn');
+        
+        let requestId;
+        let selectedDNA = null;
+        let stage = 'interphase';
+
+        const cell = {
+            center: { x: 0, y: 0 },
+            radius: 0
+        };
+        
+        let centrioles = [];
+        let showCentrioles = false;
+        let showCentralNuclearMembrane = true;
+        
+        let hasNuclearMembrane = false;
+        let hasCytokinesisLine = false;
+        let allDecondensed = false;
+
+        const initialDNA = 6;
+        let chromosomes = [];
+        let oldChromosomes = [];
+        const baseColors = ['#f87171', '#34d399', '#60a5fa', '#f97316', '#14b8a6', '#c084fc'];
+        
+        let isDragging = false;
+        let draggedChr = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        const SNAP_DISTANCE = 50;
+
+        let spindleProgress = 0;
+        let cytokinesisProgress = 0;
+        const CYTOKINESIS_ANIMATION_DURATION = 1500;
+        let lastTimestamp = 0;
+
+        // DNA 생성 범위, 핵막 크기에 사용
+        const DNA_GENERATION_RADIUS_RATIO = 0.5;
+
+        function showInfo(message) {
+            infoBox.textContent = message;
+            infoBox.classList.add('visible');
+            clearTimeout(infoBox.timeout);
+            infoBox.timeout = setTimeout(() => {
+                infoBox.classList.remove('visible');
+            }, 3000);
+        }
+
+        function init() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            cell.center.x = canvas.width / 2;
+            cell.center.y = canvas.height / 2;
+            cell.radius = Math.min(canvas.width, canvas.height) * 0.4;
+
+            const centrioleDistance = cell.radius * (2 / 3);
+            centrioles = [
+                { x: cell.center.x - centrioleDistance, y: cell.center.y },
+                { x: cell.center.x + centrioleDistance, y: cell.center.y }
+            ];
+
+            chromosomes = [];
+            const homologousPairs = [
+                { id1: '1A', id2: '1B', baseColor: '#ef4444' },
+                { id1: '2A', id2: '2B', baseColor: '#34d399' },
+                { id1: '3A', id2: '3B', baseColor: '#3b82f6' }
+            ];
+            
+            let strandIdCounter = 0;
+            const dnaSpawnRadius = cell.radius * DNA_GENERATION_RADIUS_RATIO;
+            homologousPairs.forEach((pair, index) => {
+                chromosomes.push({
+                    id: pair.id1,
+                    homologousId: index + 1,
+                    strandId: strandIdCounter++,
+                    isSister: false,
+                    color: pair.baseColor,
+                    type: 'dna',
+                    x: cell.center.x + (Math.random() - 0.5) * dnaSpawnRadius,
+                    y: cell.center.y + (Math.random() - 0.5) * dnaSpawnRadius,
+                    replicated: false,
+                    condensed: false,
+                    targetX: null,
+                    targetY: null,
+                    targetRotation: null
+                });
+                chromosomes.push({
+                    id: pair.id2,
+                    homologousId: index + 1,
+                    strandId: strandIdCounter++,
+                    isSister: false,
+                    color: pair.baseColor,
+                    type: 'dna',
+                    x: cell.center.x + (Math.random() - 0.5) * dnaSpawnRadius,
+                    y: cell.center.y + (Math.random() - 0.5) * dnaSpawnRadius,
+                    replicated: false,
+                    condensed: false,
+                    targetX: null,
+                    targetY: null,
+                    targetRotation: null
+                });
+            });
+            stage = 'interphase';
+            cytokinesisProgress = 0;
+            oldChromosomes = [];
+            showCentrioles = false;
+            showCentralNuclearMembrane = true;
+            hasNuclearMembrane = false;
+            hasCytokinesisLine = false;
+            allDecondensed = false;
+            updateControls();
+            congratsModal.style.display = 'none';
+        }
+
+        function drawCell() {
+            const radius = cell.radius;
+            const center = cell.center;
+            ctx.save();
+            
+            // Draw outer cell membrane regardless of stage
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            if (stage === 'prophase' || stage === 'metaphase_spindles_attached') {
+                ctx.beginPath();
+                ctx.moveTo(cell.center.x, cell.center.y - cell.radius);
+                ctx.lineTo(cell.center.x, cell.center.y + cell.radius);
+                ctx.strokeStyle = '#a0aec0';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            ctx.restore();
+        }
+        
+        function drawCentralNuclearMembrane() {
+            if (showCentralNuclearMembrane) {
+                ctx.beginPath();
+                ctx.arc(cell.center.x, cell.center.y, cell.radius * DNA_GENERATION_RADIUS_RATIO, 0, Math.PI * 2);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        function drawCentrioles() {
+            if (!showCentrioles) return;
+            ctx.save();
+            ctx.fillStyle = '#f87171';
+            ctx.beginPath();
+            ctx.arc(centrioles[0].x, centrioles[0].y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(centrioles[1].x, centrioles[1].y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawNuclearEnvelopes() {
+            if (hasNuclearMembrane) {
+                const radius = 60;
+                ctx.beginPath();
+                ctx.arc(centrioles[0].x, centrioles[0].y, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.arc(centrioles[1].x, centrioles[1].y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        function drawDNA(chr) {
+            ctx.save();
+            ctx.translate(chr.x, chr.y);
+            ctx.strokeStyle = chr.color;
+            ctx.lineWidth = 1;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.bezierCurveTo(5, -5, -5, 5, 0, 10);
+            ctx.stroke();
+
+            ctx.fillStyle = chr.color;
+            ctx.font = '10px Inter';
+            ctx.fillText(chr.id, 5, 15);
+            ctx.restore();
+        }
+
+        function drawCondensed(chr) {
+            ctx.save();
+            ctx.translate(chr.x, chr.y);
+            ctx.rotate(chr.targetRotation || 0);
+
+            ctx.beginPath();
+            ctx.strokeStyle = chr.color;
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.moveTo(0, -15);
+            ctx.lineTo(0, 15);
+            ctx.stroke();
+            
+            ctx.fillStyle = chr.color;
+            ctx.font = '10px Inter';
+            ctx.fillText(chr.id, 10, 5);
+            
+            ctx.restore();
+        }
+
+        function drawChromosome(chr) {
+            ctx.save();
+            ctx.translate(chr.x, chr.y);
+            ctx.rotate(chr.targetRotation || 0);
+
+            const armLength = 20;
+            ctx.strokeStyle = chr.color;
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-5, -armLength);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(5, 0);
+            ctx.lineTo(5, -armLength);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-5, armLength);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(5, 0);
+            ctx.lineTo(5, armLength);
+            ctx.stroke();
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#334155';
+            ctx.stroke();
+
+            ctx.fillStyle = chr.color;
+            ctx.font = '10px Inter';
+            ctx.fillText(chr.originalIds.join(', '), 10, 5);
+
+            ctx.restore();
+        }
+        
+        function drawSeparatedChromatid(chr) {
+            ctx.save();
+            ctx.translate(chr.x, chr.y);
+            ctx.rotate(chr.targetRotation || 0);
+
+            const armLength = 20;
+            ctx.strokeStyle = chr.color;
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -armLength);
+            ctx.lineTo(0, armLength);
+            ctx.stroke();
+
+            ctx.fillStyle = chr.color;
+            ctx.font = '10px Inter';
+            ctx.fillText(chr.id, 10, 5);
+            ctx.restore();
+        }
+
+        function checkIfAllDecondensed() {
+            return chromosomes.filter(c => c.type === 'dna').length === 12;
+        }
+
+        function animate(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawCell();
+            drawCentralNuclearMembrane();
+            drawNuclearEnvelopes();
+
+            if (showCentrioles) {
+                drawCentrioles();
+            }
+
+            if (stage === 'launchingSpindles') {
+                spindleProgress += deltaTime / 1500;
+                if (spindleProgress >= 1) {
+                    spindleProgress = 1;
+                    stage = 'metaphase_spindles_attached';
+                    showInfo('방추사가 염색체에 부착되었습니다. 염색분체 분리 버튼을 누르세요!');
+                    updateControls();
+                }
+            }
+
+            if (stage === 'anaphase') {
+                let allSeparated = true;
+                chromosomes.forEach(chr => {
+                    if (chr.targetX !== null) {
+                        allSeparated = false;
+                        chr.x += (chr.targetX - chr.x) * 0.05;
+                        chr.y += (chr.targetY - chr.y) * 0.05;
+                        if (getDistance({x: chr.x, y: chr.y}, {x: chr.targetX, y: chr.targetY}) < 2) {
+                            chr.x = chr.targetX;
+                            chr.y = chr.targetY;
+                            chr.targetX = null;
+                            chr.targetY = null;
+                        }
+                    }
+                });
+
+                if (allSeparated) {
+                    stage = 'telophase';
+                    showInfo('염색분체가 양 극으로 이동했습니다. 핵막을 만들거나 세포질을 분열시킬 수 있습니다!');
+                    updateControls();
+                }
+            }
+            
+            if (stage === 'cytokinesis') {
+                cytokinesisProgress += deltaTime / CYTOKINESIS_ANIMATION_DURATION;
+                const progress = Math.min(cytokinesisProgress, 1);
+                
+                ctx.save();
+                ctx.strokeStyle = '#4a5568';
+                ctx.lineWidth = 2;
+                
+                ctx.beginPath();
+                ctx.moveTo(cell.center.x, cell.center.y - cell.radius);
+                const topY = cell.center.y - cell.radius + (cell.radius * progress);
+                ctx.lineTo(cell.center.x, topY);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(cell.center.x, cell.center.y + cell.radius);
+                const bottomY = cell.center.y + cell.radius - (cell.radius * progress);
+                ctx.lineTo(cell.center.x, bottomY);
+                ctx.stroke();
+                
+                ctx.restore();
+                 
+                if (progress >= 1) {
+                    hasCytokinesisLine = true;
+                    showInfo('세포질 분열이 완료되었습니다!');
+                    stage = 'telophase_final';
+                    updateControls();
+                }
+            }
+            
+            if (hasCytokinesisLine) {
+                 ctx.save();
+                 ctx.strokeStyle = '#4a5568';
+                 ctx.lineWidth = 2;
+                 ctx.beginPath();
+                 ctx.moveTo(cell.center.x, cell.center.y - cell.radius);
+                 ctx.lineTo(cell.center.x, cell.center.y + cell.radius);
+                 ctx.stroke();
+                 ctx.restore();
+            }
+            
+            if (hasNuclearMembrane && hasCytokinesisLine && checkIfAllDecondensed()) {
+                stage = 'finished';
+                showInfo('두 개의 새로운 딸세포가 형성되었습니다. 체세포 분열 과정을 성공적으로 완료했습니다!');
+                updateControls();
+                congratsModal.style.display = 'flex';
+            }
+
+            chromosomes.forEach(chr => {
+                if (chr.targetX !== null && chr.targetY !== null && stage !== 'anaphase' && stage !== 'cytokinesis') {
+                    chr.x += (chr.targetX - chr.x) * 0.05;
+                    chr.y += (chr.targetY - chr.y) * 0.05;
+                    if (getDistance({x: chr.x, y: chr.y}, {x: chr.targetX, y: chr.targetY}) < 2) {
+                         chr.x = chr.targetX;
+                         chr.y = chr.targetY;
+                         chr.targetX = null;
+                         chr.targetY = null;
+                         updateControls();
+                    }
+                }
+                
+                if (chr.targetRotation !== null) {
+                    let diff = chr.targetRotation - (chr.rotation || 0);
+                    if (Math.abs(diff) > Math.PI) diff -= Math.sign(diff) * Math.PI * 2;
+                    chr.rotation = (chr.rotation || 0) + diff * 0.05;
+                    if (Math.abs(diff) < 0.01) {
+                        chr.rotation = chr.targetRotation;
+                        chr.targetRotation = null;
+                    }
+                }
+
+                if (chr.type === 'dna') {
+                    drawDNA(chr);
+                } else if (chr.type === 'condensed') {
+                    drawCondensed(chr);
+                } else if (chr.type === 'chromosome') {
+                    drawChromosome(chr);
+                } else if (chr.type === 'separated') {
+                    drawSeparatedChromatid(chr);
+                }
+            });
+
+            if (stage === 'launchingSpindles' || stage === 'metaphase_spindles_attached' || stage === 'anaphase') {
+                drawSpindleFibers();
+            }
+            
+            if (stage !== 'finished') {
+                requestId = requestAnimationFrame(animate);
+            }
+        }
+
+        function drawSpindleFibers() {
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1;
+            
+            const pole1 = centrioles[0];
+            const pole2 = centrioles[1];
+            
+            chromosomes.forEach(chr => {
+                if (chr.type === 'chromosome') {
+                    if (stage === 'launchingSpindles') {
+                        const progress = spindleProgress;
+                        const p1 = { x: pole1.x, y: pole1.y };
+                        const p2 = { x: pole2.x, y: pole2.y };
+                        
+                        const targetX1 = chr.x;
+                        const targetY1 = chr.y;
+                        const targetX2 = chr.x;
+                        const targetY2 = chr.y;
+                        
+                        const currentX1 = p1.x + (targetX1 - p1.x) * progress;
+                        const currentY1 = p1.y + (targetY1 - p1.y) * progress;
+                        const currentX2 = p2.x + (targetX2 - p2.x) * progress;
+                        const currentY2 = p2.y + (targetY2 - p2.y) * progress;
+
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(currentX1, currentY1);
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(p2.x, p2.y);
+                        ctx.lineTo(currentX2, currentY2);
+                        ctx.stroke();
+
+                    } else if (stage === 'metaphase_spindles_attached') {
+                         ctx.beginPath();
+                         ctx.moveTo(pole1.x, pole1.y);
+                         ctx.lineTo(chr.x, chr.y);
+                         ctx.stroke();
+
+                         ctx.beginPath();
+                         ctx.moveTo(pole2.x, pole2.y);
+                         ctx.lineTo(chr.x, chr.y);
+                         ctx.stroke();
+                    }
+                } else if (chr.type === 'separated') {
+                    if (stage === 'anaphase' || stage === 'telophase' || stage === 'telophase_nuclear_membrane') {
+                        const targetPole = chr.targetX < cell.center.x ? pole1 : pole2;
+                        ctx.beginPath();
+                        ctx.moveTo(chr.x, chr.y);
+                        ctx.lineTo(targetPole.x, targetPole.y);
+                        ctx.stroke();
+                    }
+                }
+            });
+        }
+
+
+        function getDistance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+        }
+
+        function isInside(point, chr) {
+            const size = chr.type === 'dna' ? 20 : 40;
+            return getDistance(point, { x: chr.x, y: chr.y }) < size / 2;
+        }
+
+        function allChromosomesReady() {
+            return chromosomes.filter(c => c.type === 'chromosome').length === 6;
+        }
+        
+        function allChromosomesAligned() {
+            if (chromosomes.filter(c => c.type === 'chromosome').length !== 6) return false;
+            
+            const verticalSpacing = 40;
+            const startY = cell.center.y - (6 / 2 - 0.5) * verticalSpacing;
+            
+            const alignedY = [startY, startY + verticalSpacing, startY + verticalSpacing * 2, startY + verticalSpacing * 3, startY + verticalSpacing * 4, startY + verticalSpacing * 5];
+            
+            let alignedCount = 0;
+            chromosomes.forEach(chr => {
+                if (Math.abs(chr.x - cell.center.x) < 5) {
+                    const closestY = alignedY.reduce((prev, curr) => (Math.abs(curr - chr.y) < Math.abs(prev - curr) ? curr : prev));
+                    if (Math.abs(closestY - chr.y) < 5) {
+                        alignedCount++;
+                    }
+                }
+            });
+            return alignedCount === 6;
+        }
+
+        function updateControls() {
+            const allChromosomesCondensed = chromosomes.every(chr => chr.type !== 'dna');
+            
+            if (stage === 'interphase') {
+                controls.nuclearMembrane.textContent = '핵막 없애기';
+                controls.nuclearMembrane.disabled = false;
+                controls.cytokinesis.disabled = true;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+            } else if (stage === 'prophase') {
+                controls.nuclearMembrane.textContent = '핵막 없애기';
+                controls.nuclearMembrane.disabled = true;
+                controls.cytokinesis.disabled = true;
+                controls.launchSpindle.disabled = !(allChromosomesReady() && allChromosomesAligned());
+                controls.separateChromatids.disabled = true;
+            } else if (stage === 'metaphase_spindles_attached') {
+                controls.nuclearMembrane.textContent = '핵막 없애기';
+                controls.nuclearMembrane.disabled = true;
+                controls.cytokinesis.disabled = true;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = false;
+            } else if (stage === 'anaphase') {
+                controls.nuclearMembrane.textContent = '핵막 없애기';
+                controls.nuclearMembrane.disabled = true;
+                controls.cytokinesis.disabled = false;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+                controls.nuclearMembrane.disabled = false;
+            } else if (stage === 'telophase') {
+                controls.nuclearMembrane.textContent = '핵막 만들기';
+                controls.nuclearMembrane.disabled = false;
+                controls.cytokinesis.disabled = false;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+            } else if (stage === 'telophase_nuclear_membrane') {
+                 controls.nuclearMembrane.textContent = '핵막 만들기';
+                controls.nuclearMembrane.disabled = true;
+                controls.cytokinesis.disabled = false;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+            } else if (stage === 'telophase_final') {
+                controls.nuclearMembrane.textContent = '핵막 만들기';
+                controls.nuclearMembrane.disabled = false;
+                controls.cytokinesis.disabled = true;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+            } else if (stage === 'finished') {
+                controls.nuclearMembrane.textContent = '핵막 없애기';
+                controls.nuclearMembrane.disabled = true;
+                controls.cytokinesis.disabled = true;
+                controls.launchSpindle.disabled = true;
+                controls.separateChromatids.disabled = true;
+            } else {
+                 controls.nuclearMembrane.disabled = true;
+                 controls.cytokinesis.disabled = true;
+                 controls.launchSpindle.disabled = true;
+                 controls.separateChromatids.disabled = true;
+            }
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (stage !== 'prophase' && stage !== 'metaphase_spindles_attached') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            draggedChr = chromosomes.find(chr => chr.type === 'chromosome' && isInside({ x: mouseX, y: mouseY }, chr));
+
+            if (draggedChr) {
+                isDragging = true;
+                dragOffsetX = mouseX - draggedChr.x;
+                dragOffsetY = mouseY - draggedChr.y;
+                draggedChr.targetX = null;
+                draggedChr.targetY = null;
+                draggedChr.targetRotation = null;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const rect = canvas.getBoundingClientRect();
+            draggedChr.x = e.clientX - rect.left - dragOffsetX;
+            draggedChr.y = e.clientY - rect.top - dragOffsetY;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const verticalSpacing = 40;
+            const startY = cell.center.y - (6 / 2 - 0.5) * verticalSpacing;
+            const alignedY = [startY, startY + verticalSpacing, startY + verticalSpacing * 2, startY + verticalSpacing * 3, startY + verticalSpacing * 4, startY + verticalSpacing * 5];
+
+            const closestY = alignedY.reduce((prev, curr) => (Math.abs(curr - draggedChr.y) < Math.abs(prev - curr) ? curr : prev));
+            
+            const distanceToTarget = getDistance({x: draggedChr.x, y: draggedChr.y}, {x: cell.center.x, y: closestY});
+            if (distanceToTarget < SNAP_DISTANCE) {
+                draggedChr.targetX = cell.center.x;
+                draggedChr.targetY = closestY;
+                draggedChr.targetRotation = 0;
+                showInfo('염색체가 올바른 위치에 배열되었습니다!');
+                setTimeout(() => updateControls(), 100);
+            }
+        });
+
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            selectedDNA = chromosomes.find(chr => isInside({ x: mouseX, y: mouseY }, chr));
+
+            if (selectedDNA) {
+                contextMenu.style.top = `${e.clientY}px`;
+                contextMenu.style.left = `${e.clientX}px`;
+                contextMenu.style.display = 'block';
+
+                const isDNA = selectedDNA.type === 'dna';
+                const isReplicated = selectedDNA.replicated;
+                const sisterStrands = chromosomes.filter(c => c.strandId === selectedDNA.strandId && c.type === 'dna');
+                
+                condenseOption.classList.toggle('disabled', sisterStrands.length !== 2);
+                replicateOption.classList.toggle('disabled', !isDNA || isReplicated);
+                
+                uncondenseOption.classList.toggle('disabled', selectedDNA.type !== 'chromosome' && selectedDNA.type !== 'separated');
+
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target) && e.target !== canvas) {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        condenseOption.addEventListener('click', () => {
+            if (selectedDNA && selectedDNA.type === 'dna') {
+                const sisterStrands = chromosomes.filter(c => c.strandId === selectedDNA.strandId && c.type === 'dna');
+                
+                if (sisterStrands.length === 2) {
+                    const [strand1, strand2] = sisterStrands;
+                    const newChr = {
+                        originalIds: [strand1.id, strand2.id],
+                        color: strand1.color,
+                        type: 'chromosome',
+                        x: (strand1.x + strand2.x) / 2,
+                        y: (strand1.y + strand2.y) / 2,
+                        targetX: null,
+                        targetY: null,
+                        targetRotation: 0,
+                        homologousId: strand1.homologousId,
+                        strandId: strand1.strandId
+                    };
+                    
+                    chromosomes = chromosomes.filter(c => c.strandId !== selectedDNA.strandId);
+                    chromosomes.push(newChr);
+                    showInfo('염색분체가 붙어 염색체가 되었습니다. 드래그해서 중앙에 배열하세요!');
+                    updateControls();
+
+                } else {
+                    showInfo('먼저 DNA를 복제해야 합니다.');
+                }
+            }
+            contextMenu.style.display = 'none';
+        });
+        
+        replicateOption.addEventListener('click', () => {
+            if (selectedDNA && selectedDNA.type === 'dna' && !selectedDNA.replicated) {
+                const newDNA = {
+                    ...selectedDNA,
+                    isSister: true,
+                    x: selectedDNA.x + 20,
+                    replicated: true
+                };
+                selectedDNA.replicated = true;
+                chromosomes.push(newDNA);
+                contextMenu.style.display = 'none';
+                showInfo('DNA가 복제되었습니다.');
+                updateControls();
+            } else if (selectedDNA && selectedDNA.replicated) {
+                 showInfo('이미 복제된 DNA입니다.');
+            }
+        });
+
+        uncondenseOption.addEventListener('click', () => {
+            if (selectedDNA && (selectedDNA.type === 'chromosome' || selectedDNA.type === 'separated')) {
+                const isSeparated = selectedDNA.type === 'separated';
+                
+                let chromosomesToKeep = chromosomes.filter(c => c.strandId !== selectedDNA.strandId);
+                
+                if (isSeparated) {
+                    const newStrand = {
+                        id: selectedDNA.id,
+                        homologousId: selectedDNA.homologousId,
+                        strandId: selectedDNA.strandId, 
+                        isSister: selectedDNA.isSister,
+                        color: selectedDNA.color,
+                        type: 'dna',
+                        x: selectedDNA.x,
+                        y: selectedDNA.y,
+                        replicated: true,
+                        condensed: false,
+                        targetX: null,
+                        targetY: null,
+                        targetRotation: null
+                    };
+                    chromosomesToKeep.push(newStrand);
+                } else {
+                    const newStrand1 = {
+                        id: selectedDNA.originalIds[0],
+                        homologousId: selectedDNA.homologousId,
+                        strandId: selectedDNA.strandId,
+                        isSister: false,
+                        color: selectedDNA.color,
+                        type: 'dna',
+                        x: selectedDNA.x - 20,
+                        y: selectedDNA.y,
+                        replicated: true,
+                        condensed: false,
+                        targetX: null,
+                        targetY: null,
+                        targetRotation: null
+                    };
+                    const newStrand2 = {
+                        id: selectedDNA.originalIds[1],
+                        homologousId: selectedDNA.homologousId,
+                        strandId: selectedDNA.strandId,
+                        isSister: true,
+                        color: selectedDNA.color,
+                        type: 'dna',
+                        x: selectedDNA.x + 20,
+                        y: selectedDNA.y,
+                        replicated: true,
+                        condensed: false,
+                        targetX: null,
+                        targetY: null,
+                        targetRotation: null
+                    };
+                    chromosomesToKeep.push(newStrand1, newStrand2);
+                }
+                
+                chromosomes = chromosomesToKeep;
+                contextMenu.style.display = 'none';
+                showInfo('염색체가 응축 풀렸습니다.');
+                updateControls();
+                
+                checkGameCompletion();
+
+            } else {
+                showInfo('염색체만 응축을 풀 수 있습니다.');
+            }
+        });
+
+        function checkGameCompletion() {
+            const currentDNAcount = chromosomes.filter(c => c.type === 'dna').length;
+            const allChromatidsDecondensed = currentDNAcount === 12;
+
+            if (hasNuclearMembrane && hasCytokinesisLine && allChromatidsDecondensed) {
+                stage = 'finished';
+                showInfo('두 개의 새로운 딸세포가 형성되었습니다. 체세포 분열 과정을 성공적으로 완료했습니다!');
+                updateControls();
+                congratsModal.style.display = 'flex';
+            }
+        }
+
+        controls.nuclearMembrane.addEventListener('click', () => {
+            if (stage === 'interphase') {
+                stage = 'prophase';
+                showCentralNuclearMembrane = false;
+                showCentrioles = true;
+                showInfo('핵막이 사라졌습니다. DNA를 복제하고 응축해 염색체를 만드세요!');
+                updateControls();
+            } else if (stage === 'anaphase' || stage === 'telophase' || stage === 'telophase_final') {
+                showCentrioles = false;
+                hasNuclearMembrane = true;
+                showInfo('새로운 핵막이 형성되었습니다. 세포질 분열 버튼을 누르세요!');
+                checkGameCompletion();
+                updateControls();
+            }
+        });
+
+
+        controls.launchSpindle.addEventListener('click', () => {
+            if (stage === 'prophase') {
+                stage = 'launchingSpindles';
+                spindleProgress = 0;
+                showInfo('방추사가 뻗어나가 염색체에 부착됩니다.');
+                updateControls();
+            }
+        });
+        
+        controls.separateChromatids.addEventListener('click', () => {
+            if (stage === 'metaphase_spindles_attached') {
+                showInfo('염색분체가 분리되어 양 극으로 이동합니다.');
+                
+                oldChromosomes = JSON.parse(JSON.stringify(chromosomes));
+                chromosomes = [];
+                
+                const pole1 = centrioles[0];
+                const pole2 = centrioles[1];
+
+                let strandIdCounter = 0;
+                oldChromosomes.forEach(chr => {
+                    if (chr.type === 'chromosome') {
+                        const chromatid1 = { id: chr.originalIds[0], type: 'separated', homologousId: chr.homologousId, color: chr.color, x: chr.x, y: chr.y, targetX: pole1.x + (Math.random() - 0.5) * 50, targetY: pole1.y + (Math.random() - 0.5) * 50, targetRotation: 0, originalIds: [chr.originalIds[0]], strandId: chr.strandId + '_1' };
+                        const chromatid2 = { id: chr.originalIds[1], type: 'separated', homologousId: chr.homologousId, color: chr.color, x: chr.x, y: chr.y, targetX: pole2.x + (Math.random() - 0.5) * 50, targetY: pole2.y + (Math.random() - 0.5) * 50, targetRotation: 0, originalIds: [chr.originalIds[1]], strandId: chr.strandId + '_2' };
+                        
+                        chromosomes.push(chromatid1, chromatid2);
+                    }
+                });
+                stage = 'anaphase';
+                updateControls();
+            }
+        });
+        
+        controls.cytokinesis.addEventListener('click', () => {
+            if (stage === 'anaphase' || stage === 'telophase' || stage === 'telophase_final') {
+                if (!hasCytokinesisLine) {
+                     stage = 'cytokinesis';
+                     cytokinesisProgress = 0;
+                     showInfo('세포질이 분열되고 있습니다. 이제 두 개의 딸세포로 나뉘어집니다!');
+                     updateControls();
+                }
+            } else {
+                 showInfo('세포질 분열은 염색분체가 양극으로 이동한 후에 가능합니다.');
+            }
+        });
+
+        restartBtn.addEventListener('click', () => {
+            init();
+            animate();
+            showInfo('게임을 시작합니다. 오른쪽 클릭으로 DNA를 조작하세요.');
+        });
+
+        window.onload = function() {
+            init();
+            animate();
+            showInfo('게임을 시작합니다. 오른쪽 클릭으로 DNA를 조작하세요.');
+        };
+
+        window.addEventListener('resize', init);
+    </script>
+</body>
+</html>
