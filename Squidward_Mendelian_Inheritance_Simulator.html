@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>징징이 유전 시뮬레이터(feat. 멘델의 유전법칙)</title>
+    <!-- Tailwind CSS CDN 로드 --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter 폰트 설정 --><style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: white; /* 캔버스 배경색 흰색으로 변경 */
+        }
+        /* Custom styles for the creature display: changed to square container */
+        .creature-display {
+            width: 120px;
+            height: 140px; /* Increased height for tentacles */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1rem; /* Square with rounded corners */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            overflow: hidden; 
+            background-color: white; /* 컨테이너 배경도 흰색으로 설정 */
+        }
+        .small-creature-display {
+            width: 48px; /* 아이콘 크기 조정 */
+            height: 56px; /* 아이콘 크기 조정 */
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            margin-right: 0.5rem;
+        }
+        /* .red-creature 및 .blue-creature 클래스는 더 이상 컨테이너 배경색을 설정하는 데 사용되지 않음 */
+        .card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* 1. 자손 결과 표시 및 스크롤 개선 */
+        #offspring-grid-container {
+            max-height: 400px; /* 최대 높이 설정 */
+            overflow-y: auto; /* 스크롤 활성화 */
+            padding: 0.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+        }
+        #offspring-grid-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #offspring-grid-container::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 4px;
+        }
+        .text-yellow-600 { color: #d97706; } /* Tailwind yellow-600 for 2 eyes */
+        .text-green-600 { color: #10b981; } /* Tailwind green-600 for 3 eyes */
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex items-start justify-center">
+
+    <div id="app" class="w-full max-w-4xl space-y-8">
+        <header class="text-center">
+            <h1 class="text-4xl font-extrabold text-gray-800 mb-2">🧬 징징이 유전 시뮬레이터 (feat. 멘델의 유전법칙)</h1>
+        </header>
+
+        <!-- NEW: Trait Guide Card -->
+        <div id="trait-guide-card" class="card p-4 mb-8 bg-indigo-50 border-indigo-200 border-l-4">
+            <h2 class="text-xl font-bold text-indigo-700 mb-3 text-center">🔎 징징이 형질 가이드</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Color Trait -->
+                <div class="p-3 bg-white rounded-lg border">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2 border-b pb-1">색깔 형질 (빨강: R, 우성 / 파랑: r, 열성)</h3>
+                    <div class="flex justify-around items-center space-x-4">
+                        <div class="text-center">
+                            <div id="guide-color-dom" class="small-creature-display mx-auto mb-1"></div>
+                            <p class="text-red-600 font-bold text-sm">R\_ (우성) = 빨강</p>
+                        </div>
+                        <div class="text-center">
+                            <div id="guide-color-rec" class="small-creature-display mx-auto mb-1"></div>
+                            <p class="text-blue-600 font-bold text-sm">rr (열성) = 파랑</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Eye Trait -->
+                <div class="p-3 bg-white rounded-lg border">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2 border-b pb-1">눈 개수 형질 (눈 3개: T, 우성 / 눈 2개: t, 열성)</h3>
+                    <div class="flex justify-around items-center space-x-4">
+                        <div class="text-center">
+                            <div id="guide-eyes-dom" class="small-creature-display mx-auto mb-1"></div>
+                            <p class="text-green-600 font-bold text-sm">T\_ (우성) = 눈 3개</p>
+                        </div>
+                        <div class="text-center">
+                            <div id="guide-eyes-rec" class="small-creature-display mx-auto mb-1"></div>
+                            <p class="text-yellow-600 font-bold text-sm">tt (열성) = 눈 2개</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- END NEW: Trait Guide Card -->
+
+        <!-- Parent Selection and Display --><div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Parent 1 --><div id="parent1-card" class="card space-y-4 md:col-span-1">
+                <h2 class="text-2xl font-semibold text-gray-700 text-center">부모 1</h2>
+                <div class="flex flex-col items-center space-y-4">
+                    <!-- Creature SVG container -->
+                    <div id="parent1-creature" class="creature-display"> 
+                        <!-- SVG will be injected here --></div>
+                    <div class="text-lg font-mono text-gray-800">
+                        유전자형: <span id="parent1-genotype" class="font-bold text-red-600">RrTt</span>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <label for="p1-color" class="font-medium text-gray-600 w-1/4">색깔 (R/r):</label>
+                        <select id="p1-color" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="RR">RR (빨강)</option>
+                            <option value="Rr" selected>Rr (빨강)</option>
+                            <option value="rr">rr (파랑)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label for="p1-eyes" class="font-medium text-gray-600 w-1/4">눈 (T/t):</label>
+                        <select id="p1-eyes" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="TT">TT (3개)</option>
+                            <option value="Tt" selected>Tt (3개)</option>
+                            <option value="tt">tt (2개)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Breeding Control --><div class="flex flex-col items-center justify-center p-6 space-y-4 md:col-span-1">
+                <button id="breed-button" class="w-full md:w-auto px-8 py-3 bg-indigo-600 text-white font-bold rounded-full text-xl hover:bg-indigo-700 transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                    교배하기 ✨
+                </button>
+                
+                <!-- 3. 조건부 대량 교배 버튼 섹션 -->
+                <div id="bulk-buttons" class="flex flex-col space-y-3 w-full md:w-auto mt-4">
+                    <button id="breed-10-button" class="hidden w-full px-4 py-2 bg-purple-500 text-white font-bold rounded-full text-lg hover:bg-purple-600 transition duration-300 disabled:opacity-50" disabled>
+                        교배하기 (10마리)
+                    </button>
+                    <button id="breed-100-button" class="hidden w-full px-4 py-2 bg-pink-500 text-white font-bold rounded-full text-lg hover:bg-pink-600 transition duration-300 disabled:opacity-50" disabled>
+                        교배하기 (100마리)
+                    </button>
+                </div>
+                <!-- 팝업 메시지 박스는 이제 플로팅 섹션으로 이동했으므로 제거 -->
+            </div>
+
+            <!-- Parent 2 --><div id="parent2-card" class="card space-y-4 md:col-span-1">
+                <h2 class="text-2xl font-semibold text-gray-700 text-center">부모 2</h2>
+                <div class="flex flex-col items-center space-y-4">
+                    <!-- Creature SVG container -->
+                    <div id="parent2-creature" class="creature-display"> 
+                        <!-- SVG will be injected here --></div>
+                    <div class="text-lg font-mono text-gray-800">
+                        유전자형: <span id="parent2-genotype" class="font-bold text-red-600">RrTt</span>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <label for="p2-color" class="font-medium text-gray-600 w-1/4">색깔 (R/r):</label>
+                        <select id="p2-color" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="RR">RR (빨강)</option>
+                            <option value="Rr" selected>Rr (빨강)</option>
+                            <option value="rr">rr (파랑)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label for="p2-eyes" class="font-medium text-gray-600 w-1/4">눈 (T/t):</label>
+                        <select id="p2-eyes" class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="TT">TT (3개)</option>
+                            <option value="Tt" selected>Tt (3개)</option>
+                            <option value="tt">tt (2개)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offspring Results (Updated to show 4 categories) --><div id="offspring-results" class="card">
+            <h2 class="text-2xl font-semibold text-gray-700 text-center mb-4">자손 결과</h2>
+            
+            <!-- 1. 자손 결과 표시 및 스크롤 개선 -->
+            <div id="offspring-grid-container">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="offspring-grid">
+                    <p class="text-center text-gray-500 md:col-span-4">교배하기 버튼을 눌러 자손을 **무제한으로** 만들어보세요!</p>
+                </div>
+            </div>
+            
+            <!-- NEW CATEGORIZED PHENOTYPE STATS -->
+            <div class="mt-8 p-4 border border-gray-200 rounded-xl bg-white shadow-inner">
+                <p class="text-center text-lg font-bold text-gray-800 mb-3">전체 표현형 비율 (총 <span id="total-offspring" class="text-indigo-600">0</span>마리)</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <!-- Category 1: Red, 3 eyes (R_ T_) -->
+                    <div class="flex flex-col items-center justify-center p-3 bg-red-100 rounded-lg">
+                        <p class="text-red-700 font-bold mb-1">1. 빨강 (눈 3개)</p>
+                        <div class="small-creature-display" id="icon-R_T_"></div>
+                        <span class="font-extrabold text-2xl text-red-800" id="count-R_T_">0</span>
+                    </div>
+                    <!-- Category 2: Red, 2 eyes (R_ tt) -->
+                    <div class="flex flex-col items-center justify-center p-3 bg-red-100 rounded-lg">
+                        <p class="text-red-700 font-bold mb-1">2. 빨강 (눈 2개)</p>
+                        <div class="small-creature-display" id="icon-R_tt"></div>
+                        <span class="font-extrabold text-2xl text-red-800" id="count-R_tt">0</span>
+                    </div>
+                    <!-- Category 3: Blue, 3 eyes (rr T_) -->
+                    <div class="flex flex-col items-center justify-center p-3 bg-blue-100 rounded-lg">
+                        <p class="text-blue-700 font-bold mb-1">3. 파랑 (눈 3개)</p>
+                        <div class="small-creature-display" id="icon-rr_T_"></div>
+                        <span class="font-extrabold text-2xl text-blue-800" id="count-rr_T_">0</span>
+                    </div>
+                    <!-- Category 4: Blue, 2 eyes (rr tt) - Base category -->
+                    <div class="flex flex-col items-center justify-center p-3 bg-blue-100 rounded-lg">
+                        <p class="text-blue-700 font-bold mb-1">4. 파랑 (눈 2개)</p>
+                        <div class="small-creature-display" id="icon-rr_tt"></div>
+                        <span class="font-extrabold text-2xl text-blue-800" id="count-rr_tt">0</span>
+                    </div>
+                </div>
+            </div>
+            <!-- END NEW CATEGORIZED PHENOTYPE STATS -->
+            
+            <!-- NEW RELATIVE RATIO SECTION -->
+            <div class="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50 shadow-inner">
+                <p class="text-center text-lg font-bold text-gray-800 mb-3">상대 표현형 비율 (<span class="font-mono text-gray-600">최소 개수 카테고리</span> = 1.00 기준)</p>
+                <div class="grid grid-cols-4 gap-4 text-center font-bold text-xl">
+                    <div class="flex flex-col">
+                        <span class="text-red-700 mb-1">빨강/3개</span>
+                        <span id="ratio-R_T_" class="font-mono text-gray-800">0.00</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-red-700 mb-1">빨강/2개</span>
+                        <span id="ratio-R_tt" class="font-mono text-gray-800">0.00</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-blue-700 mb-1">파랑/3개</span>
+                        <span id="ratio-rr_T_" class="font-mono text-gray-800">0.00</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-blue-700 mb-1">파랑/2개</span>
+                        <span id="ratio-rr_tt" class="font-mono text-gray-800">0.00</span>
+                    </div>
+                </div>
+                <p id="ratio-basis-info" class="text-center text-xs text-gray-500 mt-2">
+                    현재 기준: 표현형 카테고리가 0보다 큰 경우 중 최소 개수를 기준으로 합니다.
+                </p>
+            </div>
+            <!-- END RELATIVE RATIO SECTION -->
+            
+            <!-- 2. 초기화 버튼 추가 -->
+            <div class="flex justify-center pt-6 pb-2">
+                <button id="reset-button" class="px-6 py-2 bg-gray-200 text-gray-700 font-bold rounded-full hover:bg-gray-300 transition duration-200">
+                    🧲 초기화 (처음부터 다시하기)
+                </button>
+            </div>
+            
+        </div>
+        
+        <!-- NEW FLOATING MESSAGE BOX -->
+        <div id="floating-message-box" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 p-3 text-white rounded-lg shadow-xl text-center z-50 transition-opacity duration-500 opacity-0 pointer-events-none">
+            <div id="message-box-content"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // 전역 상태 변수
+        const TRAITS = {
+            COLOR: {
+                allele1: 'R', // Dominant for Red
+                allele2: 'r', // Recessive for Blue
+                dominantPhenotype: '빨강',
+                recessivePhenotype: '파랑',
+                dominantColorHex: '#f87171',
+                recessiveColorHex: '#60a5fa',
+                dominantStyle: 'red-creature',
+                recessiveStyle: 'blue-creature',
+            },
+            EYES: {
+                allele1: 'T', // Dominant for Three Eyes
+                allele2: 't', // Recessive for Two Eyes
+                dominantPhenotype: '눈 3개',
+                recessivePhenotype: '눈 2개',
+            }
+        };
+
+        // 표현형 4가지 카테고리로 통계 재정의
+        let offspringStats = {
+            total: 0,
+            R_T_: 0, // Red, 3 eyes (R_ T_)
+            R_tt: 0, // Red, 2 eyes (R_ tt)
+            rr_T_: 0, // Blue, 3 eyes (rr T_)
+            rr_tt: 0  // Blue, 2 eyes (rr tt)
+        };
+        
+        // 2. 스페이스바/마우스 연속 교배를 위한 변수
+        let isSpacePressed = false;
+        let breedInterval = null;
+        
+        let isMousePressed = false; // 마우스 꾹 누르기 상태 변수
+        let mouseBreedInterval = null; // 마우스 꾹 누르기 인터벌
+        const SINGLE_BREED_DELAY = 100; // 1마리 교배 딜레이 (100ms)
+        const BULK_BREED_DELAY = 250;  // 10마리/100마리 교배 딜레이 (250ms)
+
+        // DOM 요소 캐시
+        const p1ColorSelect = document.getElementById('p1-color');
+        const p1EyesSelect = document.getElementById('p1-eyes'); 
+        const p2ColorSelect = document.getElementById('p2-color');
+        const p2EyesSelect = document.getElementById('p2-eyes'); 
+        
+        const parent1CreatureDiv = document.getElementById('parent1-creature');
+        const parent2CreatureDiv = document.getElementById('parent2-creature');
+        const p1GenotypeDisplay = document.getElementById('parent1-genotype');
+        const p2GenotypeDisplay = document.getElementById('parent2-genotype');
+
+        const offspringGrid = document.getElementById('offspring-grid');
+        const breedButton = document.getElementById('breed-button');
+        const totalOffspringSpan = document.getElementById('total-offspring');
+        const resetButton = document.getElementById('reset-button'); // 초기화 버튼
+        
+        // 1. 메시지 박스 DOM 요소 변경
+        const floatingMessageBox = document.getElementById('floating-message-box');
+        const messageBoxContent = document.getElementById('message-box-content');
+        
+        // 새로운 통계 카운터 DOM 요소
+        const countR_T_Span = document.getElementById('count-R_T_');
+        const countR_ttSpan = document.getElementById('count-R_tt');
+        const countrr_T_Span = document.getElementById('count-rr_T_');
+        const countrr_ttSpan = document.getElementById('count-rr_tt');
+        
+        // 새로운 상대 비율 DOM 요소
+        const ratioR_T_Span = document.getElementById('ratio-R_T_');
+        const ratioR_ttSpan = document.getElementById('ratio-R_tt');
+        const ratiorr_T_Span = document.getElementById('ratio-rr_T_');
+        const ratiorr_ttSpan = document.getElementById('ratio-rr_tt');
+        const ratioBasisInfo = document.getElementById('ratio-basis-info'); // 기준 정보 표시
+        
+        // 3. 대량 교배 버튼 DOM 요소
+        const breed10Button = document.getElementById('breed-10-button');
+        const breed100Button = document.getElementById('breed-100-button');
+        
+        // 새로운 형질 가이드 DOM 요소
+        const guideColorDomDiv = document.getElementById('guide-color-dom');
+        const guideColorRecDiv = document.getElementById('guide-color-rec');
+        const guideEyesDomDiv = document.getElementById('guide-eyes-dom');
+        const guideEyesRecDiv = document.getElementById('guide-eyes-rec');
+
+
+        /**
+         * 유전자형에 따라 생명체의 도트 스타일 SVG 코드를 생성합니다.
+         */
+        function generateCreatureSVG(colorGenotype, eyesGenotype, isSmall = false) {
+            // 1. Color Phenotype (R is dominant)
+            const isRed = colorGenotype.includes(TRAITS.COLOR.allele1);
+            const bodyColor = isRed ? TRAITS.COLOR.dominantColorHex : TRAITS.COLOR.recessiveColorHex;
+            
+            // 2. Eyes Phenotype (T is dominant)
+            const isThreeEyes = eyesGenotype.includes(TRAITS.EYES.allele1);
+            const eyeColor = "#000";
+            
+            // Adjust size based on container (for small offspring grid)
+            const scale = isSmall ? 0.6 : 1; // 아이콘 크기에 맞춰 scale 조정
+            
+            // NEW: Use 100x120 viewBox to accommodate tentacles and square body
+            let svg = `
+                <svg viewBox="0 0 100 120" class="w-full h-full" xmlns="http://www.w3.org/2000/svg" style="transform: scale(${scale});">
+                    <!-- Body (Square with slightly rounded corners - 80x80). 이 부분만 색깔이 칠해집니다. -->
+                    <rect x="10" y="10" width="80" height="80" rx="10" ry="10" fill="${bodyColor}" stroke="#333" stroke-width="4" />
+                    
+                    <!-- Cheeks/Spots (Pixel dots) - Adjusted Y -->
+                    <circle cx="28" cy="60" r="3" fill="#ffffff" opacity="0.4"/>
+                    <circle cx="72" cy="60" r="3" fill="#ffffff" opacity="0.4"/>
+
+                    <!-- Face Features -->
+                    <!-- Nose (Simple dot) - Adjusted Y -->
+                    <circle cx="50" cy="55" r="3" fill="#333"/>
+                    <!-- Mouth (Cute smile) - Adjusted Y -->
+                    <path d="M 40 65 Q 50 73 60 65" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+                    <!-- Eye 1 (Left - moved to forehead) - Adjusted Y -->
+                    <circle cx="30" cy="40" r="5" fill="${eyeColor}"/>
+                    
+                    <!-- Eye 2 (Right - moved to forehead) - Adjusted Y -->
+                    <circle cx="70" cy="40" r="5" fill="${eyeColor}"/>
+            `;
+            
+            // Eye 3 (Center - if Dominant T is present - moved to forehead) - Adjusted Y
+            if (isThreeEyes) {
+                svg += `
+                    <circle cx="50" cy="35" r="5" fill="${eyeColor}"/>
+                `;
+            }
+            
+            // 8 Tentacles (Pixelated lines from bottom)
+            const tentacleCount = 8;
+            const length = 20; // Length of tentacles
+            const spread = 70; // Horizontal spread
+            const baseCx = 50;
+            const bodyBottom = 90; // Y coordinate of the bottom of the square body (10 + 80)
+
+            for (let i = 0; i < tentacleCount; i++) {
+                // Spread the tentacles slightly below the body
+                const startX = baseCx + (i - (tentacleCount - 1) / 2) * (spread / tentacleCount) * 0.9;
+                const endX = startX + (i - (tentacleCount - 1) / 2) * (spread / tentacleCount) * 0.2; 
+                const endY = bodyBottom + length; // Extend tentacles to Y=110 (within 120 viewBox)
+                
+                svg += `<line x1="${startX}" y1="${bodyBottom}" x2="${endX}" y2="${endY}" stroke="#333" stroke-width="3" stroke-linecap="round"/>`;
+            }
+
+            svg += '</svg>';
+            return svg;
+        }
+
+
+        /**
+         * 부모의 선택에 따라 유전자형을 업데이트하고 화면에 표시합니다.
+         */
+        function updateParentDisplay(parentNum) {
+            let colorGenotype, eyesGenotype, creatureDiv, genotypeDisplay;
+
+            if (parentNum === 1) {
+                colorGenotype = p1ColorSelect.value;
+                eyesGenotype = p1EyesSelect.value;
+                creatureDiv = parent1CreatureDiv;
+                genotypeDisplay = p1GenotypeDisplay;
+            } else {
+                colorGenotype = p2ColorSelect.value;
+                eyesGenotype = p2EyesSelect.value;
+                creatureDiv = parent2CreatureDiv;
+                genotypeDisplay = p2GenotypeDisplay;
+            }
+
+            const fullGenotype = colorGenotype + eyesGenotype;
+            genotypeDisplay.textContent = fullGenotype;
+
+            // 1. Color Phenotype (R is dominant)
+            const isRed = colorGenotype.includes(TRAITS.COLOR.allele1);
+
+            // Update container class: 색깔 클래스를 제거하고 기본 'creature-display'만 유지
+            creatureDiv.className = `creature-display`;
+
+            // Update genotype text color
+            if (isRed) {
+                genotypeDisplay.classList.add('text-red-600');
+                genotypeDisplay.classList.remove('text-blue-600');
+            } else { 
+                genotypeDisplay.classList.remove('text-red-600');
+                genotypeDisplay.classList.add('text-blue-600');
+            }
+
+            // 2. Render SVG
+            creatureDiv.innerHTML = generateCreatureSVG(colorGenotype, eyesGenotype, false);
+        }
+
+        /**
+         * 주어진 유전자형에서 가능한 배우자(gamete)를 생성합니다. (분리의 법칙)
+         */
+        function getGametes(colorGenotype, eyesGenotype) {
+            const colorAlleles = [...new Set(colorGenotype)];
+            const eyesAlleles = [...new Set(eyesGenotype)];
+            const gametes = [];
+
+            // 독립의 법칙 적용 (두 특성이 독립적으로 유전)
+            for (const c of colorAlleles) {
+                for (const a of eyesAlleles) {
+                    gametes.push(c + a);
+                }
+            }
+            return gametes;
+        }
+
+        /**
+         * 단일 자손을 생성하고 통계를 업데이트합니다.
+         */
+        function generateSingleOffspring() {
+            const p1Color = p1ColorSelect.value;
+            const p1Eyes = p1EyesSelect.value;
+            const p2Color = p2ColorSelect.value;
+            const p2Eyes = p2EyesSelect.value;
+
+            // 1. 배우자 생성 (분리 법칙)
+            const p1Gametes = getGametes(p1Color, p1Eyes);
+            const p2Gametes = getGametes(p2Color, p2Eyes);
+            
+            // 2. 랜덤 배우자 선택
+            const p1Gamete = p1Gametes[Math.floor(Math.random() * p1Gametes.length)];
+            const p2Gamete = p2Gametes[Math.floor(Math.random() * p2Gametes.length)];
+
+            // 3. 자손 유전자형 조합
+            const offspringColorAlleles = [p1Gamete[0], p2Gamete[0]].sort();
+            const offspringColorGenotype = offspringColorAlleles.join('');
+            
+            const offspringEyesAlleles = [p1Gamete[1], p2Gamete[1]].sort();
+            const offspringEyesGenotype = offspringEyesAlleles.join('');
+            
+            const offspringGenotype = offspringColorGenotype + offspringEyesGenotype;
+
+            // 4. 통계 업데이트
+            updateStats(offspringGenotype);
+
+            // 5. 결과 표시 (10개만 시각적으로 표시)
+            displayOffspring(offspringGenotype);
+        }
+        
+        /**
+         * 교배 버튼의 주 기능: 지정된 횟수만큼 자손을 생성합니다.
+         */
+        function breedOffspring(count = 1) {
+            let lastMessage = '';
+            try {
+                for (let i = 0; i < count; i++) {
+                    generateSingleOffspring();
+                }
+                
+                // 3. 대량 교배 버튼 활성화 조건 체크
+                checkBulkButtonActivation();
+
+                if (count === 1) {
+                    lastMessage = '새로운 자손이 태어났습니다!';
+                } else {
+                    lastMessage = `${count}마리의 자손이 빠르게 태어났습니다!`;
+                }
+
+                showMessage(lastMessage);
+            } catch (error) {
+                console.error("Breeding failed:", error);
+                showMessage('교배 중 오류가 발생했습니다. 콘솔을 확인해주세요.', true);
+            }
+        }
+
+
+        /**
+         * 유전자형을 기반으로 4가지 표현형 카테고리 통계를 업데이트합니다.
+         * @param {string} genotype - 자손의 유전자형 (예: RrTt)
+         */
+        function updateStats(genotype) {
+            offspringStats.total++;
+            
+            const colorGenotype = genotype.substring(0, 2);
+            const eyesGenotype = genotype.substring(2, 4);
+            
+            const isRed = colorGenotype.includes(TRAITS.COLOR.allele1); // R
+            const isThreeEye = eyesGenotype.includes(TRAITS.EYES.allele1); // T
+
+            let categoryKey;
+
+            if (isRed && isThreeEye) {
+                categoryKey = 'R_T_';
+            } else if (isRed && !isThreeEye) {
+                categoryKey = 'R_tt';
+            } else if (!isRed && isThreeEye) {
+                categoryKey = 'rr_T_';
+            } else { // !isRed && !isThreeEye (rr tt)
+                categoryKey = 'rr_tt';
+            }
+            
+            offspringStats[categoryKey]++;
+            
+            // Update display spans for the 4 categories
+            totalOffspringSpan.textContent = offspringStats.total;
+            countR_T_Span.textContent = offspringStats.R_T_;
+            countR_ttSpan.textContent = offspringStats.R_tt;
+            countrr_T_Span.textContent = offspringStats.rr_T_;
+            countrr_ttSpan.textContent = offspringStats.rr_tt;
+            
+            // Update relative ratios
+            updateRelativeRatios();
+        }
+
+        /**
+         * '전체 표현형 중 개수가 0보다 큰 것 중 가장 작은 개수'를 기준으로 하여 상대 비율을 계산하고 표시합니다.
+         */
+        function updateRelativeRatios() {
+            const ratios = {
+                R_T_: offspringStats.R_T_,
+                R_tt: offspringStats.R_tt,
+                rr_T_: offspringStats.rr_T_,
+                rr_tt: offspringStats.rr_tt
+            };
+
+            const ratioElements = {
+                R_T_: ratioR_T_Span,
+                R_tt: ratioR_ttSpan,
+                rr_T_: ratiorr_T_Span,
+                rr_tt: ratiorr_ttSpan
+            };
+            
+            const phenotypeLabels = {
+                R_T_: '빨강/3개', R_tt: '빨강/2개', rr_T_: '파랑/3개', rr_tt: '파랑/2개'
+            };
+
+            const nonZeroCounts = Object.entries(ratios)
+                                      .filter(([key, count]) => count > 0)
+                                      .map(([key, count]) => ({ key, count }));
+
+            if (offspringStats.total === 0) {
+                // 초기 상태
+                Object.values(ratioElements).forEach(el => el.textContent = '0.00');
+                ratioBasisInfo.textContent = '현재 기준: 교배 전';
+                return;
+            }
+
+            if (nonZeroCounts.length === 0) {
+                 // 이론적으로 총 개수가 0보다 크면 발생할 수 없지만, 안전을 위해 처리
+                Object.values(ratioElements).forEach(el => el.textContent = 'N/A');
+                ratioBasisInfo.textContent = '현재 기준: 데이터 부족';
+                return;
+            }
+
+            // 2. 가장 작은 개수 (기준 분모) 찾기
+            const minEntry = nonZeroCounts.reduce((min, current) => 
+                current.count < min.count ? current : min, nonZeroCounts[0]);
+            
+            const baseCount = minEntry.count;
+            const baseKey = minEntry.key;
+            
+            // 기준 정보 업데이트
+            const baseLabel = phenotypeLabels[baseKey];
+            ratioBasisInfo.textContent = `현재 기준: ${baseLabel} (${baseCount}마리)`;
+
+            // 1. 소수점 둘째 자리까지 계산 및 표시
+            for (const key in ratios) {
+                if (ratios[key] > 0) {
+                    const ratio = ratios[key] / baseCount;
+                    ratioElements[key].textContent = ratio.toFixed(2);
+                } else {
+                    ratioElements[key].textContent = '0.00';
+                }
+            }
+        }
+
+        /**
+         * 자손의 결과를 화면에 표시합니다.
+         */
+        function displayOffspring(genotype) {
+            // Remove initial message if it exists
+            const initialMessage = offspringGrid.querySelector('p');
+            
+            // [오류 수정]: 선택된 요소(initialMessage)가 offspringGrid의 직계 자손인지 확인합니다.
+            if (initialMessage && initialMessage.parentElement === offspringGrid) {
+                offspringGrid.removeChild(initialMessage);
+            }
+            
+            // Separate genotypes for SVG rendering
+            const colorGenotype = genotype.substring(0, 2);
+            const eyesGenotype = genotype.substring(2, 4);
+
+            const offspringDiv = document.createElement('div');
+            // 'flex-col items-center' 클래스를 제거하여 인라인으로 배치되도록 함
+            offspringDiv.className = 'p-3 border border-gray-100 rounded-lg bg-gray-50 space-y-2 transform hover:shadow-md transition duration-200';
+            offspringDiv.style.animation = 'fadeIn 0.5s ease-out';
+            offspringDiv.style.display = 'flex';
+            offspringDiv.style.flexDirection = 'column';
+            offspringDiv.style.alignItems = 'center';
+
+            const creatureDiv = document.createElement('div');
+            // 색깔 클래스를 제거하고 기본 클래스만 유지
+            creatureDiv.className = `creature-display small-creature-display`; 
+            creatureDiv.innerHTML = generateCreatureSVG(colorGenotype, eyesGenotype, true); // Render small SVG
+            
+            const genotypeP = document.createElement('p');
+            genotypeP.className = 'text-sm font-mono font-bold text-gray-800';
+            genotypeP.textContent = genotype;
+
+            offspringDiv.appendChild(creatureDiv);
+            offspringDiv.appendChild(genotypeP);
+
+            // Add to grid (prepend to show newest first)
+            offspringGrid.prepend(offspringDiv);
+
+            // 1. 자손 결과가 한 번에 10개씩 보이도록 합니다.
+            // (스크롤 기능을 통해 이전 자손도 볼 수 있도록 제한 로직은 제거)
+        }
+        
+        /**
+         * 3. 대량 교배 버튼 활성화 조건 체크 및 업데이트
+         */
+        function checkBulkButtonActivation() {
+            const total = offspringStats.total;
+
+            // 10마리 교배 버튼 (총 100마리 이상일 때 활성화)
+            if (total >= 100 && breed10Button.hasAttribute('disabled')) {
+                breed10Button.classList.remove('hidden');
+                breed10Button.removeAttribute('disabled');
+                showMessage('10마리 동시 교배 버튼이 활성화되었습니다!', false);
+            } else if (total < 100 && !breed10Button.hasAttribute('disabled')) {
+                // 이스터에그이므로 비활성화는 하지 않음. 다만 처음에는 hidden 상태로 시작함.
+            }
+            
+            // 100마리 교배 버튼 (총 1000마리 이상일 때 활성화)
+            if (total >= 1000 && breed100Button.hasAttribute('disabled')) {
+                breed100Button.classList.remove('hidden');
+                breed100Button.removeAttribute('disabled');
+                showMessage('100마리 동시 교배 버튼이 활성화되었습니다!', false);
+            } else if (total < 1000 && !breed100Button.hasAttribute('disabled')) {
+                // 이스터에그이므로 비활성화는 하지 않음. 다만 처음에는 hidden 상태로 시작함.
+            }
+
+            // 초기 상태에서는 버튼 숨기기
+            if (total === 0) {
+                breed10Button.classList.add('hidden');
+                breed100Button.classList.add('hidden');
+            }
+        }
+
+        /**
+         * 4가지 대표 표현형 아이콘을 초기 화면에 렌더링합니다. (통계용)
+         */
+        function initializeOffspringIcons() {
+            // 1. 빨강 (눈 3개) - 예시 유전자형: RrTt
+            document.getElementById('icon-R_T_').innerHTML = generateCreatureSVG('Rr', 'Tt', true);
+            // 2. 빨강 (눈 2개) - 예시 유전자형: Rrtt
+            document.getElementById('icon-R_tt').innerHTML = generateCreatureSVG('Rr', 'tt', true);
+            // 3. 파랑 (눈 3개) - 예시 유전자형: rrTt
+            document.getElementById('icon-rr_T_').innerHTML = generateCreatureSVG('rr', 'Tt', true);
+            // 4. 파랑 (눈 2개) - 예시 유전자형: rrtt
+            document.getElementById('icon-rr_tt').innerHTML = generateCreatureSVG('rr', 'tt', true);
+        }
+
+        /**
+         * 새로운 형질 가이드 아이콘을 렌더링합니다.
+         */
+        function initializeTraitGuideIcons() {
+            // Color Guide
+            // R_ (Red, Dominant) - Use Rrtt as a representative (빨강, 눈 2개)
+            guideColorDomDiv.innerHTML = generateCreatureSVG('Rr', 'tt', true);
+            // rr (Blue, Recessive) - Use rrtt as a representative (파랑, 눈 2개)
+            guideColorRecDiv.innerHTML = generateCreatureSVG('rr', 'tt', true);
+            
+            // Eyes Guide
+            // T_ (3 Eyes, Dominant) - Use rrTt as a representative (파랑, 눈 3개)
+            guideEyesDomDiv.innerHTML = generateCreatureSVG('rr', 'Tt', true);
+            // tt (2 Eyes, Recessive) - Use rrtt as a representative (파랑, 눈 2개)
+            guideEyesRecDiv.innerHTML = generateCreatureSVG('rr', 'tt', true);
+        }
+        
+        /**
+         * 1. 플로팅 메시지 박스에 메시지를 표시합니다.
+         */
+        function showMessage(text, isError = false) {
+            // 모든 이전 배경 클래스 제거
+            floatingMessageBox.classList.remove('bg-red-600', 'bg-green-600');
+            
+            messageBoxContent.textContent = text;
+            floatingMessageBox.classList.add(isError ? 'bg-red-600' : 'bg-green-600');
+            
+            // 플로팅 메시지 박스를 보이게 함
+            floatingMessageBox.classList.add('opacity-100', 'pointer-events-auto');
+            floatingMessageBox.classList.remove('opacity-0', 'pointer-events-none');
+
+            // 3초 후 숨김 처리
+            setTimeout(() => {
+                floatingMessageBox.classList.remove('opacity-100', 'pointer-events-auto');
+                floatingMessageBox.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        /**
+         * 2. 스페이스바 연속 교배를 위한 이벤트 핸들러
+         */
+        function handleKeyDown(event) {
+            if (event.code === 'Space' && !isSpacePressed) {
+                isSpacePressed = true;
+                
+                // 스페이스바는 기본 1마리 교배 속도 사용
+                breedOffspring(1); 
+                breedInterval = setInterval(() => {
+                    if (isSpacePressed) breedOffspring(1);
+                }, SINGLE_BREED_DELAY);
+                event.preventDefault(); // 스페이스바의 기본 동작 (스크롤) 방지
+            }
+        }
+
+        function handleKeyUp(event) {
+            if (event.code === 'Space') {
+                isSpacePressed = false;
+                clearInterval(breedInterval);
+            }
+        }
+        
+        /**
+         * 2. 마우스 꾹 누르기 연속 교배 핸들러
+         * @param {number} count - 한 번에 생성할 자손 수
+         */
+        function handleMouseDown(event, count) {
+            // 왼쪽 버튼 (0) 클릭일 경우에만 작동
+            if (event.button === 0 && !isMousePressed) { 
+                isMousePressed = true;
+                
+                // 딜레이 설정 (1마리는 100ms, 대량은 250ms)
+                const delay = count === 1 ? SINGLE_BREED_DELAY : BULK_BREED_DELAY;
+                
+                breedOffspring(count); // 최초 한 번 실행
+                mouseBreedInterval = setInterval(() => {
+                    if (isMousePressed) { 
+                        breedOffspring(count);
+                    } else {
+                        clearInterval(mouseBreedInterval);
+                    }
+                }, delay);
+                // 마우스 클릭의 기본 동작(드래그 등) 방지
+                event.preventDefault(); 
+            }
+        }
+
+        function handleMouseUp() {
+            if (isMousePressed) {
+                isMousePressed = false;
+                clearInterval(mouseBreedInterval);
+            }
+        }
+        
+        /**
+         * 2. 초기화 함수
+         */
+        function resetSimulator() {
+            // 통계 초기화
+            offspringStats = { total: 0, R_T_: 0, R_tt: 0, rr_T_: 0, rr_tt: 0 };
+            
+            // 화면 요소 초기화
+            // 자손 목록 비우기
+            offspringGrid.innerHTML = '<p class="text-center text-gray-500 md:col-span-4">교배하기 버튼을 눌러 자손을 **무제한으로** 만들어보세요!</p>';
+            
+            // 통계 업데이트 (모두 0으로 설정)
+            totalOffspringSpan.textContent = '0';
+            countR_T_Span.textContent = '0';
+            countR_ttSpan.textContent = '0';
+            countrr_T_Span.textContent = '0';
+            countrr_ttSpan.textContent = '0';
+            updateRelativeRatios(); // 비율도 N/A 또는 0.0으로 업데이트
+            
+            // 대량 교배 버튼 숨기기 및 비활성화
+            breed10Button.classList.add('hidden');
+            breed10Button.setAttribute('disabled', 'true');
+            breed100Button.classList.add('hidden');
+            breed100Button.setAttribute('disabled', 'true');
+            
+            showMessage('시뮬레이션이 초기화되었습니다!', false);
+        }
+
+
+        /**
+         * 이벤트 리스너 설정 및 초기화
+         */
+        window.onload = function() {
+            // 부모 선택 드롭다운 변경 시 디스플레이 업데이트
+            p1ColorSelect.addEventListener('change', () => updateParentDisplay(1));
+            p1EyesSelect.addEventListener('change', () => updateParentDisplay(1));
+            p2ColorSelect.addEventListener('change', () => updateParentDisplay(2));
+            p2EyesSelect.addEventListener('change', () => updateParentDisplay(2));
+
+            // 2. 초기화 버튼 이벤트 리스너
+            resetButton.addEventListener('click', resetSimulator);
+
+            // 교배 버튼 클릭 이벤트 및 마우스 연속 교배 리스너 등록
+            
+            // 1마리 교배 버튼
+            breedButton.addEventListener('click', () => breedOffspring(1));
+            breedButton.addEventListener('mousedown', (e) => handleMouseDown(e, 1));
+            
+            // 10마리 교배 버튼
+            breed10Button.addEventListener('click', () => breedOffspring(10));
+            breed10Button.addEventListener('mousedown', (e) => handleMouseDown(e, 10));
+            
+            // 100마리 교배 버튼
+            breed100Button.addEventListener('click', () => breedOffspring(100));
+            breed100Button.addEventListener('mousedown', (e) => handleMouseDown(e, 100));
+            
+            // 마우스 떼기/떠나기 이벤트는 모든 버튼에 공통 적용
+            document.addEventListener('mouseup', handleMouseUp); 
+            
+            [breedButton, breed10Button, breed100Button].forEach(btn => {
+                btn.addEventListener('mouseleave', () => {
+                    // 버튼 영역을 벗어났을 때도 연속 교배 중지 (안전 장치)
+                    if (isMousePressed) handleMouseUp();
+                });
+            });
+            
+            // 2. 스페이스바 연속 교배 이벤트 리스너 등록
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            
+            // 초기 디스플레이 설정
+            updateParentDisplay(1);
+            updateParentDisplay(2);
+            initializeOffspringIcons(); // 초기 표현형 아이콘 렌더링 (통계용)
+            initializeTraitGuideIcons(); // 형질 가이드 아이콘 렌더링 (상단 가이드용)
+            updateRelativeRatios(); // 초기 상대 비율 렌더링 (0.0으로)
+            checkBulkButtonActivation(); // 초기 버튼 상태 확인 (모두 숨김/비활성화)
+        }
+        
+        // CSS for fade-in animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        `;
+        document.head.appendChild(style);
+
+    </script>
+</body>
+</html>
