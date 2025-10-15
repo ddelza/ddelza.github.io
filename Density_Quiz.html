@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>밀도 방탈출 퀴즈</title>
+  <style>
+    :root{--bg:#0f172a;--ink:#e5e7eb;--muted:#94a3b8;--accent:#22d3ee;--accent-2:#a78bfa;--danger:#fb7185;--ok:#34d399;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:18px}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:radial-gradient(1200px 800px at 20% 10%,#1e293b,var(--bg)),radial-gradient(800px 600px at 80% 90%,#0b1226,#000);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:min(960px,100%);background:linear-gradient(180deg,#0b1226aa,#0b1226cc 60%,#0b1226aa);border:1px solid #233045;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    header{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid #1f2a3b;background:linear-gradient(90deg,#0b1226 0%,#0e1630 60%,#0b1226 100%)}
+    header h1{font-size:20px;margin:0}
+    header .badge{margin-left:auto;font-size:12px;color:var(--muted)}
+    header .btn{margin-left:10px}
+    .progress{height:8px;width:100%;background:#0f1a2a;border-top:1px solid #1f2a3b}
+    .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .4s ease}
+    main{padding:26px;display:grid;gap:18px}
+    .card{background:linear-gradient(180deg,#0f1a2acc,#0b1226cc);border:1px solid #1f2a3b;border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+    .title{font-size:22px;margin:0 0 10px}
+    .subtitle{font-size:14px;color:var(--muted);margin:0 0 16px}
+    .options{display:grid;gap:10px;margin:10px 0 6px}
+    .opt{background:#0b1424;border:1px solid #1f2a3b;border-radius:12px;padding:12px 14px;cursor:pointer;transition:transform .05s ease,border-color .2s ease,background .2s ease}
+    .opt:hover{border-color:#2b3c57}
+    .opt.correct{border-color:#1d463d;background:#0d1f1b}
+    .opt.wrong{border-color:#4a2631;background:#1b0e12}
+    .feedback{font-size:14px;line-height:1.6;padding:12px 14px;border-radius:12px;border:1px dashed #26435f;background:#0b1526;color:#c7d2fe;display:none}
+    .feedback.show{display:block}
+    .actions{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:10px}
+    button{appearance:none;border:none;padding:12px 16px;border-radius:12px;cursor:pointer;font-weight:600}
+    .btn{background:#0d1a2b;color:var(--ink);border:1px solid #1f2a3b}
+    .btn:hover{border-color:#2b3c57}
+    .primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#0b1020}
+    .primary:disabled{opacity:.5;cursor:not-allowed}
+    table.grid{width:100%;border-collapse:separate;border-spacing:8px}
+    table.grid td{border:1px solid #284264;border-radius:10px;padding:10px;text-align:center;background:#0b1526;font-weight:700}
+    .door{text-align:center;padding:14px 16px;border:1px dashed #314361;border-radius:14px;background:#0b1526}
+    input[type=text]{width:100%;font-size:18px;padding:12px 14px;border-radius:12px;border:1px solid #263650;background:#0a1426;color:var(--ink)}
+    footer{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-top:1px solid #1f2a3b;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <h1>밀도 방탈출</h1>
+      <div class="badge" id="stepLabel">문제 1 / 6</div>
+      <button class="btn" id="resetBtn">초기화</button>
+    </header>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <main id="mainArea"></main>
+    <footer>
+      <div>제작: 밀도 마스터 🧪</div>
+      <div id="progressText">0/6 정답</div>
+    </footer>
+  </div>
+  <script>
+  function $(s,r=document){return r.querySelector(s)}
+  function $$(s,r=document){return r.querySelectorAll(s)}
+  const REWARDS=["기름","도끼","개","여우","아들","형제"];
+  const FINAL_ANSWERS=["FRIEND"];
+  const QUIZ=[
+    {q:"쇠로 만든 배는 왜 물에 뜰까?",o:["내부 자석이 물을 밀어낸다.","배 전체의 평균 밀도가 물보다 작기 때문이다(공기 포함).","쇠는 물보다 가볍다."],a:1,fb:["자석은 관계없습니다.","정답! 배의 내부 공기로 평균 밀도가 낮아져 부력이 중력을 이깁니다.","쇠의 밀도는 물보다 큽니다."]},
+    {q:"얼음은 왜 물 위에 뜰까?",o:["표면 장력이 크다.","어는 동안 부피가 커져 밀도가 감소한다.","고체라 분자가 촘촘하다."],a:1,fb:["표면 장력은 핵심 요인이 아닙니다.","정답! 같은 질량이라도 부피가 커지면 밀도가 낮아집니다.","오히려 수소결합 격자로 부피가 커집니다."]},
+    {q:"1리터 물과 1리터 식용유, 어느 쪽이 더 무거울까?",o:["물.","식용유.","같다."],a:0,fb:["정답! 물의 밀도(1.0)가 식용유(0.9)보다 큽니다.","식용유는 물보다 가볍습니다.","밀도가 다르면 질량이 다릅니다."]},
+    {q:"뜨거운 공기 풍선이 위로 뜨는 이유는?",o:["온도가 오르면 공기의 질량이 줄어든다.","공기를 가열하면 부피가 늘어나 밀도가 줄어든다.","뜨거운 공기 속 분자들이 더 무거워진다."],a:1,fb:["온도 상승으로 질량 자체가 줄어드는 것은 아닙니다.","정답! 온도↑→부피↑→밀도↓로 부력이 생깁니다.","온도 상승 시 분자 운동은 커지지만 질량은 변하지 않습니다."]},
+    {q:"쇠구슬과 스티로폼 공을 물에 넣으면?",o:["둘 다 뜬다.","쇠구슬은 가라앉고 스티로폼은 뜬다.","둘 다 가라앉는다."],a:1,fb:["쇠의 밀도는 물보다 큽니다.","정답! 밀도 차이 때문입니다.","쇠는 가라앉고 스티로폼은 뜹니다."]},
+    {q:"소금물에 계란을 넣으면 뜨는 이유는?",o:["소금물의 밀도가 증가해서.","껍데기가 가벼워져서.","계란 밀도가 줄어서."],a:0,fb:["정답! 용액 밀도가 커져 부력이 커집니다.","껍데기와는 무관합니다.","계란 밀도는 변하지 않습니다."]}
+  ];
+  let idx=-1;let solved=new Set();
+  const main=$('#mainArea');const bar=$('#bar');const label=$('#stepLabel');
+  function render(){bar.style.width=`${(solved.size/QUIZ.length)*100}%`;label.textContent=`문제 ${Math.min(idx+1,QUIZ.length)} / ${QUIZ.length}`;$('#progressText').textContent=`${solved.size}/${QUIZ.length} 정답`;}
+  function showIntro(){main.innerHTML=`<section class='card'><h2 class='title'>규칙</h2><p class='subtitle'>정답을 맞히면 다음으로 이동합니다.</p><div class='actions'><button class='primary' id='startBtn'>시작하기</button></div></section>`;$('#startBtn').onclick=()=>{idx=0;showQ();};}
+  function showQ(){if(idx>=QUIZ.length){showDoor();return;}const q=QUIZ[idx];main.innerHTML=`<section class='card'><h2 class='title'>${q.q}</h2><div class='options'>${q.o.map((t,i)=>`<div class='opt' data-i='${i}'>${t}</div>`).join('')}</div><div class='feedback'></div><div class='actions'><button class='btn' id='prevBtn'>이전</button><button class='primary' id='nextBtn' disabled>다음</button></div></section>`;$$('.opt').forEach(o=>o.onclick=()=>{const i=+o.dataset.i;const fb=$('.feedback');if(i===q.a){o.classList.add('correct');fb.innerHTML=`✅ ${q.fb[i]}<br><br><span class='subtitle'>획득 단어: <strong>${REWARDS[idx]}</strong></span>`;solved.add(idx);$('#nextBtn').disabled=false;}else{o.classList.add('wrong');fb.textContent=`❌ ${q.fb[i]}`;}fb.classList.add('show');render();});$('#prevBtn').onclick=()=>{if(idx>0){idx--;showQ();}else showIntro();};$('#nextBtn').onclick=()=>{idx++;showQ();};render();}
+  function showDoor(){main.innerHTML=`<section class='card'><h2 class='title'>암호 표지판</h2><table class='grid'><tbody><tr><td>?</td><td></td><td>O</td><td></td><td></td><td>?</td></tr><tr><td>O</td><td>?</td><td>?</td><td>X</td><td>O</td><td>O</td></tr><tr><td>X</td><td>O</td><td></td><td>?</td><td>?</td><td></td></tr></tbody></table><p class='subtitle'>힌트: 주어진 단어를 영어로 하면 무엇일까요?</p><div class='door'><input id='doorInput' type='text' placeholder='(대문자로 작성)'><div class='actions' style='margin-top:12px'><button class='primary' id='openBtn'>문 열기</button></div><p id='doorMsg' class='subtitle'></p></div></section>`;$('#openBtn').onclick=()=>{const val=$('#doorInput').value.trim().toUpperCase();const msg=$('#doorMsg');if(FINAL_ANSWERS.includes(val)){msg.style.color='var(--ok)';msg.textContent='🎉 성공! 방탈출 완료!';}else{msg.style.color='var(--danger)';msg.textContent='암호가 틀립니다.';}};render();}
+  $('#resetBtn').onclick=()=>{solved.clear();idx=-1;showIntro();render();};
+  showIntro();
+  </script>
+</body>
+</html>
