@@ -73,6 +73,23 @@
   .card .desc{ font-size:0.85rem; color:var(--muted); flex:1; }
   .card .updated{ font-size:0.75rem; color:#9ca3af; }
   .card.editing{ outline:.2rem; }
+  .expand-btn{
+    align-self:flex-start; background:none; border:none; color:var(--accent);
+    font-size:0.8rem; cursor:pointer; padding:2px 0;
+  }
+  .expand-btn:hover{ text-decoration:underline; }
+  .sub-list{
+    border-top:1px dashed var(--border); margin-top:2px; padding-top:8px;
+    display:flex; flex-direction:column; gap:5px; max-height:200px; overflow-y:auto;
+  }
+  .sub-list a{
+    font-size:0.82rem; color:var(--text); text-decoration:none;
+    word-break:break-word; padding:2px 0;
+  }
+  .sub-list a:hover{ color:var(--accent); text-decoration:underline; }
+  .sub-list .sub-empty, .sub-list .sub-loading, .sub-list .sub-error{
+    font-size:0.8rem; color:var(--muted);
+  }
   footer{ text-align:center; padding:30px 0 50px; color:var(--muted); font-size:0.8rem; }
   .admin-hint{
     max-width:900px; margin:10px auto 0; padding:0 20px; text-align:center;
@@ -107,7 +124,7 @@
 const USER = "ddelza";
 const SELF_REPO = "ddelza.github.io";
 const NAMES_FILE = "names.json";
-const CACHE_KEY = "ghio_hub_cache_v1";
+const CACHE_KEY = "ghio_hub_cache_v3";
 const CACHE_TTL = 10 * 60 * 1000; // 10분
 
 let allItems = [];
@@ -115,6 +132,7 @@ let customNames = {};
 let dirty = false;
 let isAdmin = false;
 let editingId = null;
+let expandedSet = new Set();
 
 async function fetchAllRepos(){
   let page = 1, all = [];
@@ -134,6 +152,17 @@ async function fetchSelfHtmlFiles(){
   if(!res.ok) throw new Error("self contents fetch failed: " + res.status);
   const data = await res.json();
   return data.filter(f => f.type === "file" && f.name.toLowerCase().endsWith(".html") && f.name.toLowerCase() !== "index.html");
+}
+
+async function fetchRepoHtmlFiles(repoName, branch){
+  const res = await fetch(`https://api.github.com/repos/${USER}/${repoName}/git/trees/${branch}?recursive=1`);
+  if(!res.ok) throw new Error("tree fetch failed: " + res.status);
+  const data = await res.json();
+  if(!data.tree) return [];
+  return data.tree
+    .filter(t => t.type === "blob" && t.path.toLowerCase().endsWith(".html") && t.path.toLowerCase() !== "index.html")
+    .map(t => t.path)
+    .sort();
 }
 
 async function fetchCustomNames(){
@@ -163,7 +192,8 @@ function buildItems(repos, selfFiles){
       name: r.name,
       desc: r.description || "",
       url: `https://${USER}.github.io/${r.name}/`,
-      updated: r.pushed_at || r.updated_at
+      updated: r.pushed_at || r.updated_at,
+      branch: r.default_branch || "main"
     }));
 
   selfFiles.forEach(f => items.push({
@@ -220,12 +250,18 @@ function render(filterText){
            ${isAdmin ? `<button class="edit-btn" data-id="${i.id}" title="이름 바꾸기">✏️</button>` : ""}
          </div>`;
 
+    const expandBtn = i.type === "repo"
+      ? `<button class="expand-btn" data-id="${i.id}">${expandedSet.has(i.id) ? '▲ 하위 페이지 숨기기' : '▼ 하위 페이지 보기'}</button>`
+      : "";
+
     return `
     <div class="card ${editingId === i.id ? 'editing' : ''}">
       <span class="badge ${i.type === 'file' ? 'file' : ''}">${i.type === 'repo' ? 'GitHub Pages' : 'HTML 파일'}</span>
       ${titleRow}
       <div class="desc">${i.desc || "&nbsp;"}</div>
       ${i.updated ? `<div class="updated">업데이트: ${formatDate(i.updated)}</div>` : ""}
+      ${expandBtn}
+      ${i.type === "repo" && expandedSet.has(i.id) ? renderSubList(i) : ""}
     </div>`;
   }).join("")}</div>`;
 
@@ -233,6 +269,48 @@ function render(filterText){
     const input = document.getElementById("editInput");
     if(input){ input.focus(); input.select(); }
   }
+}
+
+function renderSubList(item){
+  if(item.subLoading){
+    return `<div class="sub-list"><span class="sub-loading">불러오는 중...</span></div>`;
+  }
+  if(item.subError){
+    return `<div class="sub-list"><span class="sub-error">하위 페이지를 불러오지 못했습니다.</span></div>`;
+  }
+  if(!item.subFiles || item.subFiles.length === 0){
+    return `<div class="sub-list"><span class="sub-empty">하위 html 페이지가 없습니다.</span></div>`;
+  }
+  return `<div class="sub-list">${item.subFiles.map(path => {
+    const url = `https://${USER}.github.io/${item.name}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    return `<a href="${url}" target="_blank" rel="noopener">📄 ${path}</a>`;
+  }).join("")}</div>`;
+}
+
+async function toggleExpand(id){
+  const item = allItems.find(i => i.id === id);
+  if(!item) return;
+
+  if(expandedSet.has(id)){
+    expandedSet.delete(id);
+    render(document.getElementById("searchBox").value);
+    return;
+  }
+
+  expandedSet.add(id);
+
+  if(!item.subFiles && !item.subError){
+    item.subLoading = true;
+    render(document.getElementById("searchBox").value);
+    try{
+      item.subFiles = await fetchRepoHtmlFiles(item.name, item.branch);
+    }catch(err){
+      console.error(err);
+      item.subError = true;
+    }
+    item.subLoading = false;
+  }
+  render(document.getElementById("searchBox").value);
 }
 
 function setDirty(v){
@@ -318,6 +396,7 @@ document.getElementById("resultArea").addEventListener("click", e => {
   const editBtn = e.target.closest(".edit-btn");
   const saveBtn = e.target.closest(".save-edit");
   const cancelBtn = e.target.closest(".cancel-edit");
+  const expandBtn = e.target.closest(".expand-btn");
 
   if(editBtn){
     startEdit(editBtn.dataset.id);
@@ -325,6 +404,8 @@ document.getElementById("resultArea").addEventListener("click", e => {
     confirmEdit(saveBtn.dataset.id);
   } else if(cancelBtn){
     cancelEdit();
+  } else if(expandBtn){
+    toggleExpand(expandBtn.dataset.id);
   }
 });
 
