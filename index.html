@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>광수 웹사이트 모음</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --text:#1f2430; --muted:#6b7280;
+    --accent:#3b82f6; --border:#e5e7eb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,"Segoe UI",Apple SD Gothic Neo,"Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--text);
+  }
+  header{
+    padding:36px 20px 20px; text-align:center;
+  }
+  header h1{ margin:0 0 6px; font-size:1.8rem; }
+  header p{ margin:0; color:var(--muted); font-size:0.95rem; }
+  .controls{
+    max-width:900px; margin:18px auto 0; padding:0 20px;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center;
+  }
+  .controls input[type="text"]{
+    flex:1; min-width:200px; max-width:380px; padding:10px 14px;
+    border:1px solid var(--border); border-radius:10px; font-size:0.95rem;
+  }
+  .controls button{
+    padding:10px 16px; border:1px solid var(--border); background:var(--card);
+    border-radius:10px; cursor:pointer; font-size:0.9rem;
+  }
+  .controls button:hover{ border-color:var(--accent); color:var(--accent); }
+  main{ max-width:1100px; margin:0 auto; padding:24px 20px 60px; }
+  .status{ text-align:center; color:var(--muted); margin:30px 0; font-size:0.9rem; }
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+    gap:16px;
+  }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:18px; text-decoration:none; color:var(--text); display:flex;
+    flex-direction:column; gap:8px; transition:transform .12s, box-shadow .12s;
+  }
+  .card:hover{ transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.08); }
+  .card .badge{
+    align-self:flex-start; font-size:0.7rem; padding:3px 8px; border-radius:999px;
+    background:#eef2ff; color:var(--accent); font-weight:600;
+  }
+  .card .badge.file{ background:#fef3e2; color:#b45309; }
+  .card h3{ margin:0; font-size:1.05rem; word-break:break-word; }
+  .card .desc{ font-size:0.85rem; color:var(--muted); flex:1; }
+  .card .updated{ font-size:0.75rem; color:#9ca3af; }
+  footer{ text-align:center; padding:30px 0 50px; color:var(--muted); font-size:0.8rem; }
+  .section-title{
+    margin:34px 0 14px; font-size:1.1rem; color:var(--muted); font-weight:600;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📚 광수 웹사이트 모음</h1>
+  <p>GitHub에 올린 모든 페이지를 한 곳에서 모아봅니다 · 새로 업로드하면 자동으로 추가됩니다</p>
+</header>
+
+<div class="controls">
+  <input type="text" id="searchBox" placeholder="이름으로 검색...">
+  <button id="refreshBtn">🔄 새로고침</button>
+</div>
+
+<main>
+  <div id="statusMsg" class="status">불러오는 중...</div>
+  <div id="resultArea"></div>
+</main>
+
+<footer>ddelza.github.io · 자동 생성된 목록입니다</footer>
+
+<script>
+const USER = "ddelza";
+const SELF_REPO = "ddelza.github.io";
+const CACHE_KEY = "ghio_hub_cache_v1";
+const CACHE_TTL = 10 * 60 * 1000; // 10분
+
+async function fetchAllRepos(){
+  let page = 1, all = [];
+  while(true){
+    const res = await fetch(`https://api.github.com/users/${USER}/repos?per_page=100&page=${page}&sort=updated`);
+    if(!res.ok) throw new Error("repo list fetch failed: " + res.status);
+    const data = await res.json();
+    all = all.concat(data);
+    if(data.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
+async function fetchSelfHtmlFiles(){
+  const res = await fetch(`https://api.github.com/repos/${USER}/${SELF_REPO}/contents/`);
+  if(!res.ok) throw new Error("self contents fetch failed: " + res.status);
+  const data = await res.json();
+  return data.filter(f => f.type === "file" && f.name.toLowerCase().endsWith(".html") && f.name.toLowerCase() !== "index.html");
+}
+
+function formatDate(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("ko-KR", {year:"numeric", month:"2-digit", day:"2-digit"});
+}
+
+function buildItems(repos, selfFiles){
+  const items = [];
+
+  repos
+    .filter(r => r.has_pages && r.name !== SELF_REPO)
+    .forEach(r => items.push({
+      type: "repo",
+      name: r.name,
+      desc: r.description || "",
+      url: `https://${USER}.github.io/${r.name}/`,
+      updated: r.pushed_at || r.updated_at
+    }));
+
+  selfFiles.forEach(f => items.push({
+    type: "file",
+    name: f.name.replace(/\.html$/i, ""),
+    desc: "ddelza.github.io 루트 페이지",
+    url: `https://${USER}.github.io/${encodeURIComponent(f.name)}`,
+    updated: null
+  }));
+
+  items.sort((a, b) => {
+    if(a.updated && b.updated) return new Date(b.updated) - new Date(a.updated);
+    if(a.updated) return -1;
+    if(b.updated) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return items;
+}
+
+function render(items, filterText){
+  const area = document.getElementById("resultArea");
+  const status = document.getElementById("statusMsg");
+  const filtered = filterText
+    ? items.filter(i => i.name.toLowerCase().includes(filterText.toLowerCase()) || i.desc.toLowerCase().includes(filterText.toLowerCase()))
+    : items;
+
+  if(filtered.length === 0){
+    status.textContent = "결과가 없습니다.";
+    status.style.display = "block";
+    area.innerHTML = "";
+    return;
+  }
+  status.style.display = "none";
+
+  area.innerHTML = `<div class="grid">${filtered.map(i => `
+    <a class="card" href="${i.url}" target="_blank" rel="noopener">
+      <span class="badge ${i.type === 'file' ? 'file' : ''}">${i.type === 'repo' ? 'GitHub Pages' : 'HTML 파일'}</span>
+      <h3>${i.name}</h3>
+      <div class="desc">${i.desc || "&nbsp;"}</div>
+      ${i.updated ? `<div class="updated">업데이트: ${formatDate(i.updated)}</div>` : ""}
+    </a>
+  `).join("")}</div>`;
+}
+
+let allItems = [];
+
+async function load(forceRefresh){
+  const status = document.getElementById("statusMsg");
+  status.style.display = "block";
+  status.textContent = "불러오는 중...";
+
+  if(!forceRefresh){
+    const cached = localStorage.getItem(CACHE_KEY);
+    if(cached){
+      try{
+        const parsed = JSON.parse(cached);
+        if(Date.now() - parsed.ts < CACHE_TTL){
+          allItems = parsed.items;
+          render(allItems, document.getElementById("searchBox").value);
+          return;
+        }
+      }catch(e){}
+    }
+  }
+
+  try{
+    const [repos, selfFiles] = await Promise.all([fetchAllRepos(), fetchSelfHtmlFiles()]);
+    allItems = buildItems(repos, selfFiles);
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), items: allItems}));
+    render(allItems, document.getElementById("searchBox").value);
+  }catch(err){
+    status.textContent = "목록을 불러오지 못했습니다 (GitHub API 요청 한도일 수 있어요). 잠시 후 새로고침 해보세요.";
+    console.error(err);
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", e => render(allItems, e.target.value));
+document.getElementById("refreshBtn").addEventListener("click", () => load(true));
+
+load(false);
+</script>
+
+</body>
+</html>
