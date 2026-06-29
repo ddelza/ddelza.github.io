@@ -32,6 +32,8 @@
     border-radius:10px; cursor:pointer; font-size:0.9rem;
   }
   .controls button:hover{ border-color:var(--accent); color:var(--accent); }
+  .controls button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .controls button.save-all{ background:#16a34a; color:#fff; border-color:#16a34a; }
   main{ max-width:1100px; margin:0 auto; padding:24px 20px 60px; }
   .status{ text-align:center; color:var(--muted); margin:30px 0; font-size:0.9rem; }
   .grid{
@@ -40,8 +42,8 @@
   }
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:14px;
-    padding:18px; text-decoration:none; color:var(--text); display:flex;
-    flex-direction:column; gap:8px; transition:transform .12s, box-shadow .12s;
+    padding:18px; display:flex; flex-direction:column; gap:8px;
+    transition:transform .12s, box-shadow .12s;
   }
   .card:hover{ transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.08); }
   .card .badge{
@@ -49,13 +51,34 @@
     background:#eef2ff; color:var(--accent); font-weight:600;
   }
   .card .badge.file{ background:#fef3e2; color:#b45309; }
-  .card h3{ margin:0; font-size:1.05rem; word-break:break-word; }
+  .title-row{ display:flex; align-items:center; gap:6px; }
+  .title-row a.title-link{
+    text-decoration:none; color:var(--text); font-size:1.05rem; font-weight:600;
+    word-break:break-word; flex:1;
+  }
+  .title-row a.title-link:hover{ color:var(--accent); }
+  .edit-btn{
+    background:none; border:none; cursor:pointer; font-size:0.95rem; padding:2px 4px;
+    border-radius:6px; line-height:1;
+  }
+  .edit-btn:hover{ background:#f1f5f9; }
+  .title-row input.edit-input{
+    flex:1; padding:6px 8px; border:1px solid var(--accent); border-radius:8px; font-size:0.95rem;
+  }
+  .title-row .edit-actions{ display:flex; gap:4px; }
+  .title-row .edit-actions button{
+    padding:5px 8px; font-size:0.8rem; border:1px solid var(--border); border-radius:8px;
+    background:var(--card); cursor:pointer;
+  }
   .card .desc{ font-size:0.85rem; color:var(--muted); flex:1; }
   .card .updated{ font-size:0.75rem; color:#9ca3af; }
+  .card.editing{ outline:.2rem; }
   footer{ text-align:center; padding:30px 0 50px; color:var(--muted); font-size:0.8rem; }
-  .section-title{
-    margin:34px 0 14px; font-size:1.1rem; color:var(--muted); font-weight:600;
+  .admin-hint{
+    max-width:900px; margin:10px auto 0; padding:0 20px; text-align:center;
+    font-size:0.8rem; color:#b45309; display:none;
   }
+  body.admin-mode .admin-hint{ display:block; }
 </style>
 </head>
 <body>
@@ -68,7 +91,10 @@
 <div class="controls">
   <input type="text" id="searchBox" placeholder="이름으로 검색...">
   <button id="refreshBtn">🔄 새로고침</button>
+  <button id="adminBtn">🔑 관리자 모드</button>
+  <button id="saveAllBtn" class="save-all" style="display:none;">💾 변경사항 저장</button>
 </div>
+<div class="admin-hint">관리자 모드: 카드의 ✏️ 버튼으로 이름을 바꾼 뒤, "변경사항 저장"을 누르면 GitHub Personal Access Token(repo 권한)을 물어봅니다. 토큰은 저장되지 않고 이번 세션에서만 사용됩니다.</div>
 
 <main>
   <div id="statusMsg" class="status">불러오는 중...</div>
@@ -80,8 +106,15 @@
 <script>
 const USER = "ddelza";
 const SELF_REPO = "ddelza.github.io";
+const NAMES_FILE = "names.json";
 const CACHE_KEY = "ghio_hub_cache_v1";
 const CACHE_TTL = 10 * 60 * 1000; // 10분
+
+let allItems = [];
+let customNames = {};
+let dirty = false;
+let isAdmin = false;
+let editingId = null;
 
 async function fetchAllRepos(){
   let page = 1, all = [];
@@ -103,6 +136,16 @@ async function fetchSelfHtmlFiles(){
   return data.filter(f => f.type === "file" && f.name.toLowerCase().endsWith(".html") && f.name.toLowerCase() !== "index.html");
 }
 
+async function fetchCustomNames(){
+  try{
+    const res = await fetch(`https://raw.githubusercontent.com/${USER}/${SELF_REPO}/main/${NAMES_FILE}?t=${Date.now()}`);
+    if(!res.ok) return {};
+    return await res.json();
+  }catch(e){
+    return {};
+  }
+}
+
 function formatDate(iso){
   if(!iso) return "";
   const d = new Date(iso);
@@ -115,6 +158,7 @@ function buildItems(repos, selfFiles){
   repos
     .filter(r => r.has_pages && r.name !== SELF_REPO)
     .forEach(r => items.push({
+      id: `repo:${r.name}`,
       type: "repo",
       name: r.name,
       desc: r.description || "",
@@ -123,6 +167,7 @@ function buildItems(repos, selfFiles){
     }));
 
   selfFiles.forEach(f => items.push({
+    id: `file:${f.name}`,
     type: "file",
     name: f.name.replace(/\.html$/i, ""),
     desc: "ddelza.github.io 루트 페이지",
@@ -140,12 +185,17 @@ function buildItems(repos, selfFiles){
   return items;
 }
 
-function render(items, filterText){
+function displayName(item){
+  return customNames[item.id] || item.name;
+}
+
+function render(filterText){
   const area = document.getElementById("resultArea");
   const status = document.getElementById("statusMsg");
-  const filtered = filterText
-    ? items.filter(i => i.name.toLowerCase().includes(filterText.toLowerCase()) || i.desc.toLowerCase().includes(filterText.toLowerCase()))
-    : items;
+  const ft = (filterText || "").toLowerCase();
+  const filtered = ft
+    ? allItems.filter(i => displayName(i).toLowerCase().includes(ft) || i.desc.toLowerCase().includes(ft))
+    : allItems;
 
   if(filtered.length === 0){
     status.textContent = "결과가 없습니다.";
@@ -155,17 +205,150 @@ function render(items, filterText){
   }
   status.style.display = "none";
 
-  area.innerHTML = `<div class="grid">${filtered.map(i => `
-    <a class="card" href="${i.url}" target="_blank" rel="noopener">
+  area.innerHTML = `<div class="grid">${filtered.map(i => {
+    const name = displayName(i);
+    const titleRow = (isAdmin && editingId === i.id)
+      ? `<div class="title-row">
+           <input type="text" class="edit-input" id="editInput" value="${name.replace(/"/g,'&quot;')}">
+           <div class="edit-actions">
+             <button class="save-edit" data-id="${i.id}">✔</button>
+             <button class="cancel-edit">✕</button>
+           </div>
+         </div>`
+      : `<div class="title-row">
+           <a class="title-link" href="${i.url}" target="_blank" rel="noopener">${name}</a>
+           ${isAdmin ? `<button class="edit-btn" data-id="${i.id}" title="이름 바꾸기">✏️</button>` : ""}
+         </div>`;
+
+    return `
+    <div class="card ${editingId === i.id ? 'editing' : ''}">
       <span class="badge ${i.type === 'file' ? 'file' : ''}">${i.type === 'repo' ? 'GitHub Pages' : 'HTML 파일'}</span>
-      <h3>${i.name}</h3>
+      ${titleRow}
       <div class="desc">${i.desc || "&nbsp;"}</div>
       ${i.updated ? `<div class="updated">업데이트: ${formatDate(i.updated)}</div>` : ""}
-    </a>
-  `).join("")}</div>`;
+    </div>`;
+  }).join("")}</div>`;
+
+  if(editingId){
+    const input = document.getElementById("editInput");
+    if(input){ input.focus(); input.select(); }
+  }
 }
 
-let allItems = [];
+function setDirty(v){
+  dirty = v;
+  document.getElementById("saveAllBtn").style.display = (isAdmin && dirty) ? "inline-block" : "none";
+}
+
+function startEdit(id){
+  editingId = id;
+  render(document.getElementById("searchBox").value);
+}
+
+function cancelEdit(){
+  editingId = null;
+  render(document.getElementById("searchBox").value);
+}
+
+function confirmEdit(id){
+  const input = document.getElementById("editInput");
+  const newName = input.value.trim();
+  const item = allItems.find(i => i.id === id);
+  if(!item) return;
+  if(!newName || newName === item.name){
+    delete customNames[id];
+  } else {
+    customNames[id] = newName;
+  }
+  setDirty(true);
+  editingId = null;
+  render(document.getElementById("searchBox").value);
+}
+
+async function saveAllNames(){
+  const pat = window.prompt("GitHub Personal Access Token(repo 권한)을 입력하세요.\n이번 세션에서만 사용되고 저장되지 않습니다.");
+  if(!pat) return;
+
+  const status = document.getElementById("statusMsg");
+  status.style.display = "block";
+  status.textContent = "저장 중...";
+
+  try{
+    let sha = null;
+    const existing = await fetch(`https://api.github.com/repos/${USER}/${SELF_REPO}/contents/${NAMES_FILE}`, {
+      headers: { Authorization: `Bearer ${pat}` }
+    });
+    if(existing.ok){
+      const data = await existing.json();
+      sha = data.sha;
+    }
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(customNames, null, 2))));
+    const body = {
+      message: "Update custom names via admin hub",
+      content,
+      ...(sha ? { sha } : {})
+    };
+
+    const res = await fetch(`https://api.github.com/repos/${USER}/${SELF_REPO}/contents/${NAMES_FILE}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    if(!res.ok){
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || ("저장 실패: " + res.status));
+    }
+
+    setDirty(false);
+    status.style.display = "none";
+    alert("저장되었습니다! 모든 방문자에게 새 이름이 반영됩니다 (캐시로 인해 몇 분 걸릴 수 있어요).");
+  }catch(err){
+    console.error(err);
+    alert("저장에 실패했습니다: " + err.message);
+    status.style.display = "none";
+  }
+}
+
+document.getElementById("resultArea").addEventListener("click", e => {
+  const editBtn = e.target.closest(".edit-btn");
+  const saveBtn = e.target.closest(".save-edit");
+  const cancelBtn = e.target.closest(".cancel-edit");
+
+  if(editBtn){
+    startEdit(editBtn.dataset.id);
+  } else if(saveBtn){
+    confirmEdit(saveBtn.dataset.id);
+  } else if(cancelBtn){
+    cancelEdit();
+  }
+});
+
+document.getElementById("resultArea").addEventListener("keydown", e => {
+  if(e.target.id === "editInput"){
+    if(e.key === "Enter") confirmEdit(e.target.closest(".card").querySelector(".save-edit").dataset.id);
+    if(e.key === "Escape") cancelEdit();
+  }
+});
+
+document.getElementById("searchBox").addEventListener("input", e => render(e.target.value));
+
+document.getElementById("refreshBtn").addEventListener("click", () => load(true));
+
+document.getElementById("adminBtn").addEventListener("click", () => {
+  isAdmin = !isAdmin;
+  document.body.classList.toggle("admin-mode", isAdmin);
+  document.getElementById("adminBtn").classList.toggle("active", isAdmin);
+  editingId = null;
+  setDirty(dirty);
+  render(document.getElementById("searchBox").value);
+});
+
+document.getElementById("saveAllBtn").addEventListener("click", saveAllNames);
 
 async function load(forceRefresh){
   const status = document.getElementById("statusMsg");
@@ -179,7 +362,8 @@ async function load(forceRefresh){
         const parsed = JSON.parse(cached);
         if(Date.now() - parsed.ts < CACHE_TTL){
           allItems = parsed.items;
-          render(allItems, document.getElementById("searchBox").value);
+          customNames = parsed.names || {};
+          render(document.getElementById("searchBox").value);
           return;
         }
       }catch(e){}
@@ -187,18 +371,16 @@ async function load(forceRefresh){
   }
 
   try{
-    const [repos, selfFiles] = await Promise.all([fetchAllRepos(), fetchSelfHtmlFiles()]);
+    const [repos, selfFiles, names] = await Promise.all([fetchAllRepos(), fetchSelfHtmlFiles(), fetchCustomNames()]);
     allItems = buildItems(repos, selfFiles);
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), items: allItems}));
-    render(allItems, document.getElementById("searchBox").value);
+    customNames = names;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), items: allItems, names: customNames}));
+    render(document.getElementById("searchBox").value);
   }catch(err){
     status.textContent = "목록을 불러오지 못했습니다 (GitHub API 요청 한도일 수 있어요). 잠시 후 새로고침 해보세요.";
     console.error(err);
   }
 }
-
-document.getElementById("searchBox").addEventListener("input", e => render(allItems, e.target.value));
-document.getElementById("refreshBtn").addEventListener("click", () => load(true));
 
 load(false);
 </script>
