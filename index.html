@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>광수 웹사이트 모음</title>
+<style>body{visibility:hidden}</style>
 <style>
   :root{
     --bg:#f4f6fb; --card:#ffffff; --text:#1f2430; --muted:#6b7280;
@@ -96,6 +97,7 @@
     font-size:0.8rem; color:#b45309; display:none;
   }
   body.admin-mode .admin-hint{ display:block; }
+  .who{ font-size:0.8rem; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -110,6 +112,8 @@
   <button id="refreshBtn">🔄 새로고침</button>
   <button id="adminBtn">🔑 관리자 모드</button>
   <button id="saveAllBtn" class="save-all" style="display:none;">💾 변경사항 저장</button>
+  <span class="who" id="whoAmI"></span>
+  <button id="logoutBtn">로그아웃</button>
 </div>
 <div class="admin-hint">관리자 모드: 카드의 ✏️ 버튼으로 이름을 바꾼 뒤, "변경사항 저장"을 누르면 GitHub Personal Access Token(repo 권한)을 물어봅니다. 토큰은 저장되지 않고 이번 세션에서만 사용됩니다.</div>
 
@@ -463,8 +467,10 @@ async function load(forceRefresh){
   }
 }
 
-load(false);
+// 로그인 통과 후 auth-gate.js가 호출한다
+window.startHub = () => load(false);
 </script>
+<script type="module" src="auth-gate.js"></script>
 
 </body>
 </html>
